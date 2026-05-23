@@ -56,7 +56,10 @@ function getWeatherBand(weather) {
 
 const WEIGHTS = {
   "Casual shirts": 220, "Casual bottoms": 360,
+  "Polo shirts": 240,
   "Work t-shirts (rig)": 220, "Rig shorts": 300, "Rig trousers": 440,
+  "Work shorts": 300, "Work shorts (optional)": 300,
+  "Work trousers / combats": 440, "Work trousers / combats (1 pair)": 440,
   "Black shirt": 260, "Black trousers": 480, "Black shoes": 880,
   "Trainers": 750, "Waterproof jacket": 420, "Warm mid-layer": 580,
   "Heavy coat": 1200, "Base layer top": 180, "Swimwear": 160,
@@ -85,21 +88,74 @@ function buildAdvisory({ totalDays, workDays, mode, band }) {
   });
 
   if (mode !== "holiday" && workDays > 0) {
-    const rigTops    = wearDays(workDays, 2);
-    const rigBottoms = (isHot || isWarm) ? wearDays(workDays, 3) : wearDays(workDays, 2);
-    const btmLabel   = (isCool || isCold) ? "Rig trousers" : "Rig shorts";
+    // ── WORKWEAR SECTION HEADER ────────────────
     cards.push({
-      category: "Work t-shirts (rig)", qty: rigTops, emoji: "👕",
-      reason: `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per top. ${isHot ? "It's hot — a rig tee works all day." : "Workhorses. Wear them hard."}`,
-      weight: WEIGHTS["Work t-shirts (rig)"] * rigTops,
+      category: "__section_workwear",
+      sectionLabel: "Workwear",
+      isSection: true,
     });
-    cards.push({
-      category: btmLabel, qty: rigBottoms, emoji: (isCool || isCold) ? "👖" : "🩳",
-      reason: (isCool || isCold)
-        ? `Cold — trousers over shorts. ${rigBottoms > 1 ? "2 wears each" : "1 pair will do"}.`
-        : `3 wears per pair. ${isHot ? "Light and practical in the heat." : ""}`,
-      weight: WEIGHTS[btmLabel] * rigBottoms,
-    });
+
+    // TOPS — polo for corporate, rig tee for rock & roll
+    const workTopQty = wearDays(workDays, 2);
+    if (mode === "corporate") {
+      cards.push({
+        category: "Polo shirts", qty: workTopQty, emoji: "👔",
+        reason: isHot
+          ? `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per polo. Hot out — a good polo breathes and reads smart. Keeps you out of the rig tee but not overdressed.`
+          : `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears each. Polo is the move for corporate site days — smarter than a tee, cooler than a shirt.`,
+        weight: 240 * workTopQty,
+      });
+    } else {
+      cards.push({
+        category: "Rig t-shirts", qty: workTopQty, emoji: "👕",
+        reason: `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per top. ${isHot ? "It's hot — keep it simple." : "Workhorses. Wear them hard."}`,
+        weight: WEIGHTS["Work t-shirts (rig)"] * workTopQty,
+      });
+    }
+
+    // BOTTOMS — weather-driven with suggestion
+    const workShortsQty   = wearDays(workDays, 3);
+    const workTrousersQty = wearDays(workDays, 2);
+
+    if (isCold) {
+      // Definitely trousers, no shorts
+      cards.push({
+        category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
+        reason: `It's cold — work shorts stay at home. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or work trousers, 2 wears each. Practical and you won't freeze.`,
+        weight: WEIGHTS["Rig trousers"] * workTrousersQty,
+      });
+    } else if (isCool) {
+      // Suggest trousers, shorts as override
+      cards.push({
+        category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
+        reason: `Cool forecast — I'd go trousers over shorts for work. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or chinos, 2 wears each. Pack shorts too if the rig is heated.`,
+        weight: WEIGHTS["Rig trousers"] * workTrousersQty,
+      });
+      cards.push({
+        category: "Work shorts (optional)", qty: 1, emoji: "🩳",
+        reason: "One pair if the work environment is warm indoors. Swap the trousers out if you don't end up needing both.",
+        weight: WEIGHTS["Rig shorts"],
+      });
+    } else if (isMild || isWarm) {
+      // Shorts main, one pair trousers in case
+      cards.push({
+        category: "Work shorts", qty: workShortsQty, emoji: "🩳",
+        reason: `${workDays} work days, 3 wears per pair. Mild/warm — shorts are the call. ${workShortsQty} pair${workShortsQty > 1 ? "s" : ""} covers you.`,
+        weight: WEIGHTS["Rig shorts"] * workShortsQty,
+      });
+      cards.push({
+        category: "Work trousers / combats (1 pair)", qty: 1, emoji: "👖",
+        reason: "One pair of combats in the bag. Colder days, smarter meetings, or just a change. Worth the space.",
+        weight: WEIGHTS["Rig trousers"],
+      });
+    } else {
+      // Hot — shorts only
+      cards.push({
+        category: "Work shorts", qty: workShortsQty, emoji: "🩳",
+        reason: `Hot — shorts all the way. 3 wears per pair, ${workShortsQty} pair${workShortsQty > 1 ? "s" : ""} for ${workDays} work days. Leave the trousers at home.`,
+        weight: WEIGHTS["Rig shorts"] * workShortsQty,
+      });
+    }
   }
 
   if (mode === "corporate" && workDays > 0) {
@@ -310,12 +366,13 @@ export default function PackingApp() {
 
   const displayCards = cards.map(c => ({
     ...c,
-    qty:    overrides[c.category] ?? c.qty,
-    weight: (WEIGHTS[c.category] || 200) * (overrides[c.category] ?? c.qty),
+    qty:    c.isSection ? 0 : (overrides[c.category] ?? c.qty),
+    weight: c.isSection ? 0 : ((WEIGHTS[c.category] || 200) * (overrides[c.category] ?? c.qty)),
   }));
 
-  const totalKg      = (displayCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1);
-  const checkedCount = Object.values(checked).filter(Boolean).length;
+  const packableCards = displayCards.filter(c => !c.isSection);
+  const totalKg       = (packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1);
+  const checkedCount  = packableCards.filter(c => checked[c.category]).length;
   const t = THEMES[mode];
 
   const adjQty = (cat, delta) => setOverrides(o => ({
@@ -342,7 +399,7 @@ export default function PackingApp() {
       <div style={{ borderBottom: `1px solid ${t.border}`, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, background: t.card }}>
         <span style={{ fontSize: 18, fontWeight: 400, letterSpacing: "0.5px" }}>Roadie Pack</span>
         <span style={{ fontSize: 12, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: "system-ui, sans-serif" }}>
-          {packMode ? `${checkedCount} / ${displayCards.length}` : ""}
+          {packMode ? `${checkedCount} / ${packableCards.length}` : ""}
         </span>
       </div>
 
@@ -451,7 +508,7 @@ export default function PackingApp() {
         {/* Section header + pack toggle */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>
-            {packMode ? `Packing — ${checkedCount} of ${displayCards.length}` : "What I'd pack"}
+            {packMode ? `Packing — ${checkedCount} of ${packableCards.length}` : "What I'd pack"}
           </span>
           <button
             onClick={() => { setPackMode(!packMode); setChecked({}); }}
@@ -469,13 +526,26 @@ export default function PackingApp() {
         {/* Progress bar */}
         {packMode && (
           <div style={{ height: 1, background: t.border, marginBottom: 24, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${(checkedCount / displayCards.length) * 100}%`, background: t.accent, transition: "width 0.3s" }} />
+            <div style={{ height: "100%", width: `${(checkedCount / packableCards.length) * 100}%`, background: t.accent, transition: "width 0.3s" }} />
           </div>
         )}
 
         {/* Cards */}
         <div style={{ display: "grid", gap: 1, borderTop: `1px solid ${t.border}` }}>
           {displayCards.map((card) => {
+            // Section divider
+            if (card.isSection) {
+              return (
+                <div key={card.category} style={{ padding: "28px 0 10px" }}>
+                  <span style={{
+                    fontFamily: "system-ui, sans-serif", fontSize: 10,
+                    color: t.accent, letterSpacing: "2px", textTransform: "uppercase",
+                    fontWeight: 600,
+                  }}>{card.sectionLabel}</span>
+                </div>
+              );
+            }
+
             const isDone = !!checked[card.category];
             const isOverrideWarnLow  = card.category === "Casual shirts" && card.qty < 3;
             const isOverrideWarnHigh = card.category === "Casual shirts" && card.qty > 6;
