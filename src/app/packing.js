@@ -134,12 +134,17 @@ function buildAdvisory({ totalDays, workDays, mode, band, bags }) {
 
   // ── BLACK BLACKS (corporate only, 1 set) ───
   if (mode === "corporate" && workDays > 0) {
+    const showBlacksQty = workDays > 4 ? 2 : 1;
     cards.push({
-      category: "Black blacks",
-      qty: 1,
-      reason: "One set — black shirt, black trousers, black shoes. Wear for the smart evening. One outfit, no argument.",
-      weight: WEIGHTS["Black shirt"] + WEIGHTS["Black trousers"] + WEIGHTS["Black shoes"],
-      items: ["Black shirt ×1", "Black trousers ×1", "Black shoes ×1"],
+      category: "Show blacks",
+      qty: showBlacksQty,
+      reason: showBlacksQty === 1
+        ? "One set — black shirt, black trousers, black shoes. You'll get two wears out of these. Smart enough for any evening, no one will notice."
+        : "Two sets — enough formal evenings to warrant it. Still get 2 wears from each.",
+      weight: (WEIGHTS["Black shirt"] + WEIGHTS["Black trousers"] + WEIGHTS["Black shoes"]) * showBlacksQty,
+      items: showBlacksQty === 1
+        ? ["Black shirt ×1", "Black trousers ×1", "Black shoes ×1"]
+        : ["Black shirt ×2", "Black trousers ×2", "Black shoes ×1"],
       emoji: "🖤",
     });
   }
@@ -152,15 +157,15 @@ function buildAdvisory({ totalDays, workDays, mode, band, bags }) {
   const wearsPerCasual = isHot ? 2 : 3; // hot = sweat, cool = stretch it
   // Travel top credit: outbound top does 1 extra casual wear
   const travelCredit = travelDays >= 1 ? 1 : 0;
-  const casualQty = Math.max(1, wearDays(Math.max(0, casualWearDays - travelCredit), wearsPerCasual));
+  const casualQty = Math.min(6, Math.max(1, wearDays(Math.max(0, casualWearDays - travelCredit), wearsPerCasual)));
 
   let casualReason = "";
-  if (isHot)        casualReason = `Hot out — ${wearsPerCasual} wears per shirt. Travel top covers arrival day so you only need ${casualQty} fresh ${casualQty === 1 ? "shirt" : "shirts"}.`;
-  else if (isWarm)  casualReason = `Warm weather, ${wearsPerCasual} wears each. Your travel top handles one casual slot — ${casualQty} shirt${casualQty > 1 ? "s" : ""} is plenty.`;
-  else if (isMild)  casualReason = `Mild temps mean a shirt can go 3 days without raising eyebrows. Travel top doubles up — ${casualQty} casual shirt${casualQty > 1 ? "s" : ""}.`;
-  else if (isCool)  casualReason = `Cool means layers — your shirts go under a mid-layer so nobody really sees them. ${casualQty} shirt${casualQty > 1 ? "s" : ""}, 3 wears each.`;
-  else if (isCold)  casualReason = `Cold means shirts are base layers under coats. You can absolutely wear the same one twice without issue. ${casualQty} shirt${casualQty > 1 ? "s" : ""}.`;
-  else              casualReason = `${casualQty} casual shirt${casualQty > 1 ? "s" : ""}. Travel top earns its keep for one casual slot.`;
+  if (isHot)        casualReason = `Hot out — ${wearsPerCasual} wears per shirt. Travel top covers arrival day so you only need ${casualQty} fresh ${casualQty === 1 ? "shirt" : "shirts"}. 6 is the ceiling — any more is just comfort blanket.`;
+  else if (isWarm)  casualReason = `Warm weather, ${wearsPerCasual} wears each. Your travel top handles one casual slot — ${casualQty} shirt${casualQty > 1 ? "s" : ""} is plenty. 6 max, you don't need more.`;
+  else if (isMild)  casualReason = `Mild temps mean a shirt can go 3 days without raising eyebrows. Travel top doubles up — ${casualQty} casual shirt${casualQty > 1 ? "s" : ""}. Cap at 6.`;
+  else if (isCool)  casualReason = `Cool means layers — your shirts go under a mid-layer so they're barely seen. ${casualQty} shirt${casualQty > 1 ? "s" : ""}, 3 wears each. 6 is more than enough for any trip.`;
+  else if (isCold)  casualReason = `Cold means shirts are base layers under coats. ${casualQty} shirt${casualQty > 1 ? "s" : ""} — you can wear the same one twice without issue. Don't pack more than 6.`;
+  else              casualReason = `${casualQty} casual shirt${casualQty > 1 ? "s" : ""}. Travel top earns its keep for one casual slot. 6 is the max I'd ever take.`;
 
   cards.push({
     category: "Casual shirts",
@@ -231,11 +236,23 @@ function buildAdvisory({ totalDays, workDays, mode, band, bags }) {
       reason: isCold
         ? "Wear the coat on the plane — this is the single heaviest item and it costs you nothing in bag weight if it's on your back. Pair with a base layer underneath for real cold."
         : isCool
-          ? "A hoodie or fleece mid-layer. Goes over any of your shirts, keeps evenings comfortable, doesn't look scruff."
-          : "Mild enough that a hoodie or light layer is all you need for evenings. One is enough.",
+          ? "A fleece or light jacket. Goes over any shirt, keeps evenings comfortable, doesn't look scruff."
+          : "Mild enough that a light layer is all you need for evenings. One is enough.",
       weight: WEIGHTS[layerLabel],
       emoji: isCold ? "🧥" : "🫙",
     });
+    // Add jumper for cool/cold — a proper knit over shirts for smarter occasions
+    if (isCool || isCold) {
+      cards.push({
+        category: "Jumper / knitwear",
+        qty: 1,
+        reason: isCold
+          ? "A merino or fine-knit jumper. Goes under your coat, over a shirt — looks put together for an evening without needing the show blacks. One is enough, merino handles multiple wears."
+          : "A smart knit or hoodie for the evening. Works over a casual shirt, doesn't look like you've just come off the rig. 2–3 wears comfortably.",
+        weight: 480,
+        emoji: "🧶",
+      });
+    }
   }
 
   if (isCold) {
@@ -303,7 +320,7 @@ export default function PackingApp() {
   const [checked, setChecked]     = useState({});
   const [overrides, setOverrides] = useState({});
 
-  // Weather fetch with debounce
+  // Weather fetch with debounce — multi-city, worst-case across all
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(async () => {
@@ -312,15 +329,36 @@ export default function PackingApp() {
       setWeather(null);
       setDestInfo(null);
       try {
-        const g = await geocode(destination.trim());
-        const daily = await fetchForecast(g.latitude, g.longitude);
-        const s = summarise(daily);
+        const cities = destination.split(",").map(s => s.trim()).filter(Boolean);
+        const results = [];
+        const labels = [];
+        for (const city of cities) {
+          try {
+            const g = await geocode(city);
+            const daily = await fetchForecast(g.latitude, g.longitude);
+            const s = summarise(daily);
+            if (s) { results.push(s); labels.push(`${g.name}, ${g.country_code}`); }
+          } catch (e) {
+            labels.push(`${city} (not found)`);
+          }
+        }
         if (cancelled) return;
-        setWeather(s);
-        setDestInfo({ name: `${g.name}, ${g.country_code}`, ...s });
-        setWxStatus("");
+        if (results.length) {
+          // Worst-case across all destinations
+          const combined = {
+            maxTemp: Math.max(...results.map(r => r.maxTemp)),
+            minTemp: Math.min(...results.map(r => r.minTemp)),
+            avgTemp: Math.round(results.reduce((s, r) => s + r.avgTemp, 0) / results.length),
+            rainChance: Math.max(...results.map(r => r.rainChance)),
+          };
+          setWeather(combined);
+          setDestInfo({ name: labels.join(" · "), ...combined });
+          setWxStatus("");
+        } else {
+          setWxStatus("Couldn't find any of those cities");
+        }
       } catch (e) {
-        if (!cancelled) { setWxStatus(`${e.message}`); }
+        if (!cancelled) setWxStatus(`${e.message}`);
       }
     }, 700);
     return () => { cancelled = true; clearTimeout(timer); };
@@ -373,10 +411,10 @@ export default function PackingApp() {
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
           <h1 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 56, fontWeight: 300, margin: 0, letterSpacing: "-1.5px", lineHeight: 1 }}>
-            Tally
+            Roadie Pack
           </h1>
           <p style={{ margin: "6px 0 0", fontSize: 13, color: t.muted, fontStyle: "italic", letterSpacing: "0.3px" }}>
-            Less in the bag. More on the road.
+            Packing to do some roadie'ing.
           </p>
         </div>
 
@@ -411,7 +449,7 @@ export default function PackingApp() {
             </div>
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", fontSize: 11, color: t.muted, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 6 }}>Destination</label>
-              <input type="text" value={destination} placeholder="Oslo, Helsinki, Dubai…" style={inp}
+              <input type="text" value={destination} placeholder="London, Barcelona, Paris" style={inp}
                 onChange={e => setDest(e.target.value)} />
             </div>
 
@@ -527,11 +565,27 @@ export default function PackingApp() {
                       </div>
                     </div>
 
-                    {/* Reason / advisory */}
+                    {/* Advisory reason */}
                     {!packMode && (
                       <p style={{ margin: "6px 0 0", fontSize: 13, color: t.muted, lineHeight: 1.55, fontStyle: "italic" }}>
                         {card.reason}
                       </p>
+                    )}
+
+                    {/* Override warnings for casual shirts */}
+                    {!packMode && card.category === "Casual shirts" && (
+                      <>
+                        {card.qty < 3 && (
+                          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#B45309", lineHeight: 1.5, fontStyle: "italic" }}>
+                            ⚠️ Under 3 is pushing it. You'll either be doing laundry mid-trip or wearing something twice in a row in mixed company. Your call, but I wouldn't.
+                          </p>
+                        )}
+                        {card.qty > 6 && (
+                          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#B45309", lineHeight: 1.5, fontStyle: "italic" }}>
+                            ⚠️ Over 6 is dead weight. That's what comfort packing looks like — you won't wear them all.
+                          </p>
+                        )}
+                      </>
                     )}
 
                     {/* Sub-items */}
@@ -576,7 +630,7 @@ export default function PackingApp() {
 
         {/* Footer */}
         <div style={{ marginTop: 44, paddingTop: 20, borderTop: `1px solid ${t.border}`, fontSize: 11, color: t.muted, lineHeight: 2 }}>
-          Rig tops · 2 wears &nbsp;·&nbsp; Casual shirts · 2 wears hot / 3 cool &nbsp;·&nbsp; Bottoms · 3 wears &nbsp;·&nbsp; Travel top reused once &nbsp;·&nbsp; Socks/UW · 1 use each
+          Rig tops · 2 wears &nbsp;·&nbsp; Casual shirts · 2 hot / 3 cool · max 6 &nbsp;·&nbsp; Show blacks · 2 wears &nbsp;·&nbsp; Bottoms · 3 wears &nbsp;·&nbsp; Travel top reused once &nbsp;·&nbsp; Socks/UW · 1 use
         </div>
 
       </div>
