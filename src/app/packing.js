@@ -221,31 +221,19 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
   }
 
   // ── OFF-DUTY / TRAVEL SHIRTS ─────────────────────────────
-  // Travel tops (2) are part of the casual pool — they count as shirts
-  // Off-duty occasions = evenings (work days) + days off + travel days
-  // Travel tops cover 2 of those occasions (outbound + return, each reused once after travel)
-  // So: additional shirts needed = ceil((total_casual_occasions - 2) / wears_per_shirt)
+  // Rule: target 3 wears per tee (can stretch to 2 if needed).
+  // Travel tops (2) are already in the bag and count as shirts.
+  // Total pool = ceil(totalDays ÷ 3). Extra shirts = pool − 2 travel tops.
+  // No hard cap — 30-day trip needs what it needs.
 
-  const offDutyOccasions = mode === "holiday"
-    ? totalDays                          // every day is off-duty
-    : (workDays + casualDays + travelDays); // evenings + days off + travel
+  const shirtPool        = Math.ceil(totalDays / 3);
+  const travelTopCredit  = 2;
+  const casualQty        = Math.max(0, shirtPool - travelTopCredit);
+  const totalShirts      = casualQty + travelTopCredit;
 
-  const wearsPerCasual   = isHot ? 2 : 3;
-  const travelTopCredit  = 2; // 2 travel tops already in the bag
-  const extraShirtsNeeded = Math.max(0, Math.ceil((offDutyOccasions - travelTopCredit) / wearsPerCasual));
-  const casualQty = Math.min(6, Math.max(1, extraShirtsNeeded));
-
-  const casualReason = isHot
-    ? `${offDutyOccasions} off-duty occasions, 2 wears per shirt. Travel tops cover 2 — you need ${casualQty} more. 6 is the ceiling.`
-    : isWarm
-      ? `${offDutyOccasions} off-duty occasions across evenings, days off and travel. Travel tops cover 2. ${casualQty} shirt${casualQty > 1 ? "s" : ""} at 3 wears each — that's the lot.`
-    : isMild
-      ? `Mild — 3 wears per shirt without raising eyebrows. ${offDutyOccasions} occasions, travel tops cover 2, so ${casualQty} extra shirt${casualQty > 1 ? "s" : ""}.`
-    : isCool
-      ? `Cool means shirts go under a jumper — stretch them to 3 wears. ${offDutyOccasions} occasions, travel tops cover 2, ${casualQty} shirt${casualQty > 1 ? "s" : ""}.`
-    : isCold
-      ? `Cold — shirts are base layers under coats, same one twice is invisible. ${casualQty} shirt${casualQty > 1 ? "s" : ""} for ${offDutyOccasions} occasions.`
-    : `${casualQty} casual shirt${casualQty > 1 ? "s" : ""}. Travel tops cover 2 occasions. 6 max.`;
+  const casualReason = casualQty === 0
+    ? `${totalDays} days — your 2 travel tops cover it at 3 wears each. No extra shirts needed.`
+    : `${totalDays} days needs ${totalShirts} shirts total at 3 wears each. Travel tops are 2 of those — pack ${casualQty} more.${isHot ? " Hot out, so aim for 2 wears max rather than 3." : ""}`;
 
   cards.push({
     category: "Casual shirts", qty: casualQty, emoji: "👔",
@@ -255,7 +243,7 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 
   cards.push({
     category: "Travel tops", qty: 2, emoji: "✈️",
-    reason: "Worn on travel days and reused — these are counted in your total casual shirt pool, not on top of it.",
+    reason: `These count as ${travelTopCredit} of your ${totalShirts} total shirts. Outbound top reused on arrival, return top stays fresh.`,
     weight: WEIGHTS["Casual shirts"] * 2,
   });
 
@@ -425,10 +413,20 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   }
 
+  const TOILETRY_OPTIONS = {
+    mini:    { label: "Mini bag",      desc: "Day bag / personal item. Basics only — deodorant, toothbrush, cleanser. No liquids over 30ml.", weight: 280, emoji: "🧴" },
+    carryon: { label: "Carry-on bag",  desc: "100ml liquids rule. Pre-packed with refillable bottles, solid deodorant, mini toothpaste. Never repack from scratch — keep it ready to go.", weight: 650, emoji: "🪥" },
+    full:    { label: "Full wash bag", desc: "Checked luggage — no restrictions. Full-size everything. Only worth it if you're checking in anyway.", weight: 1400, emoji: "🛁" },
+  };
+
   cards.push({
-    category: "Toiletries", qty: 1, emoji: "🪥",
-    reason: "One pre-packed bag. Refillable 100ml bottles, solid deodorant. Never repack from scratch.",
-    weight: WEIGHTS["Toiletries"],
+    category: "Toiletry bag",
+    isToletryCta: true,
+    emoji: "🪥",
+    options: TOILETRY_OPTIONS,
+    weight: 0,
+    qty: 1,
+    reason: "",
   });
 
   return { cards };
@@ -475,6 +473,7 @@ export default function PackingApp() {
   const [packMode, setPackMode]     = useState(false);
   const [checked, setChecked]       = useState({});
   const [overrides, setOverrides]   = useState({});
+  const [toiletryBag, setToiletryBag] = useState("carryon");
 
   useEffect(() => {
     let cancelled = false;
@@ -523,11 +522,16 @@ export default function PackingApp() {
   const band = getWeatherBand(weather);
   const { cards } = buildAdvisory({ totalDays, workDays: mode === "holiday" ? 0 : workDays, mode, band, weather });
 
-  const displayCards = cards.map(c => ({
-    ...c,
-    qty:    c.isSection ? 0 : (overrides[c.category] ?? c.qty),
-    weight: c.isSection ? 0 : ((WEIGHTS[c.category] || 200) * (overrides[c.category] ?? c.qty)),
-  }));
+  const TOILETRY_WEIGHTS = { mini: 280, carryon: 650, full: 1400 };
+
+  const displayCards = cards.map(c => {
+    if (c.isToletryCta) return { ...c, weight: TOILETRY_WEIGHTS[toiletryBag] };
+    return {
+      ...c,
+      qty:    c.isSection ? 0 : (overrides[c.category] ?? c.qty),
+      weight: c.isSection ? 0 : ((WEIGHTS[c.category] || 200) * (overrides[c.category] ?? c.qty)),
+    };
+  });
 
   const packableCards = displayCards.filter(c => !c.isSection);
   const totalKg       = (packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1);
@@ -705,9 +709,43 @@ export default function PackingApp() {
               );
             }
 
+            // Toiletry bag picker
+            if (card.isToletryCta) {
+              const opts = card.options;
+              return (
+                <div key="toiletry" style={{ borderBottom: `1px solid ${t.border}`, padding: "20px 0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+                    <span style={{ fontSize: 20 }}>🪥</span>
+                    <span style={{ fontSize: 18, fontWeight: 400 }}>Toiletry bag</span>
+                    <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, marginLeft: "auto" }}>
+                      ~{wFmt(TOILETRY_WEIGHTS[toiletryBag])}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {Object.entries(opts).map(([key, opt]) => (
+                      <button key={key} onClick={() => setToiletryBag(key)} style={{
+                        padding: "8px 16px", borderRadius: 6, cursor: "pointer",
+                        fontFamily: "system-ui, sans-serif", fontSize: 12, letterSpacing: "0.3px",
+                        border: `1px solid ${toiletryBag === key ? t.accent : t.border}`,
+                        background: toiletryBag === key ? t.accentLight : "transparent",
+                        color: toiletryBag === key ? t.accent : t.muted,
+                        transition: "all 0.15s",
+                      }}>
+                        {opt.emoji} {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {!packMode && (
+                    <p style={{ margin: "8px 0 0", fontSize: 13, color: t.muted, lineHeight: 1.6, fontStyle: "italic", fontWeight: 300 }}>
+                      {opts[toiletryBag].desc}
+                    </p>
+                  )}
+                </div>
+              );
+            }
+
             const isDone = !!checked[card.category];
-            const isOverrideWarnLow  = card.category === "Casual shirts" && card.qty < 3;
-            const isOverrideWarnHigh = card.category === "Casual shirts" && card.qty > 6;
+            const isOverrideWarnLow  = card.category === "Casual shirts" && card.qty < 3 && card.qty > 0;
 
             return (
               <div key={card.category}
@@ -788,12 +826,10 @@ export default function PackingApp() {
                       </p>
                     )}
 
-                    {/* Casual shirt warnings */}
-                    {!packMode && (isOverrideWarnLow || isOverrideWarnHigh) && (
+                    {/* Casual shirt low warning */}
+                    {!packMode && isOverrideWarnLow && (
                       <p style={{ margin: "6px 0 0", fontSize: 13, color: "#92400E", lineHeight: 1.55, fontStyle: "italic", fontWeight: 300 }}>
-                        {isOverrideWarnLow
-                          ? "Under 3 is pushing it. Laundry mid-trip or repeating in mixed company. Your call."
-                          : "Over 6 is dead weight. Comfort packing. You won't wear them all."}
+                        Under 3 is pushing it. Laundry mid-trip or repeating in mixed company. Your call.
                       </p>
                     )}
 
