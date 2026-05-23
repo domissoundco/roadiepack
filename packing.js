@@ -1,58 +1,56 @@
-import React, { useState, useEffect } from "react";
+"use client";
+import { useState, useEffect } from "react";
 
-// ───────────────────────────────────────────────────────────────
-// PACKING LOGIC — wear-ratios baked in
-// Tops: 2 wears each. Bottoms: 3 wears each. Socks/underwear: 1 use.
-// ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ITEM WEIGHTS (grams) — rough estimates, XL sizing
+// ─────────────────────────────────────────────
+const ITEM_WEIGHTS = {
+  "Underwear": 40,
+  "Socks": 60,
+  "Rig t-shirts": 220,
+  "Rig shorts": 320,
+  "Rig trousers": 450,
+  "Black shirt": 260,
+  "Black trousers": 480,
+  "Black shoes": 900,
+  "Casual tops": 220,
+  "Casual bottoms": 380,
+  "Travel tops": 220,
+  "Smart shirt": 260,
+  "Trainers/casual shoes": 800,
+  "Waterproof jacket": 450,
+  "Swimwear": 180,
+  "Warm layer / hoodie": 600,
+  "Toiletries kit": 800,
+};
 
-const TOP_WEARS = 2;              // work/rig tops
+// ─────────────────────────────────────────────
+// PACKING LOGIC
+// ─────────────────────────────────────────────
+const TOP_WEARS = 2;
 const BOTTOM_WEARS = 3;
-const CASUAL_TOP_HOT = 2;          // ≥22°C max
-const CASUAL_TOP_COOL = 3;         // <22°C max
-const TRAVEL_TOP_BONUS_WEARS = 1;  // outbound travel top → 1 extra casual wear after arrival
+const CASUAL_TOP_HOT = 2;
+const CASUAL_TOP_COOL = 3;
+const TRAVEL_TOP_BONUS = 1;
 
-// Round up division
 const ceil = (n, d) => Math.ceil(n / d);
-
-// Casual top wears flex with weather
-const casualTopWears = (weather) => {
-  if (weather && weather.maxTemp >= 22) return CASUAL_TOP_HOT;
-  return CASUAL_TOP_COOL;
-};
-
-// Calculate casual tops accounting for travel-top reuse
-// Outbound travel top absorbs 1 casual wear after arrival.
-// Return travel top stays clean for the journey home.
-const calcCasualTops = (casualWearDays, weather) => {
-  const wears = casualTopWears(weather);
-  const credited = Math.max(0, casualWearDays - TRAVEL_TOP_BONUS_WEARS);
-  return Math.max(0, ceil(credited, wears));
-};
+const casualTopWears = (w) => (w && w.maxTemp >= 22 ? CASUAL_TOP_HOT : CASUAL_TOP_COOL);
+const calcCasualTops = (days, w) => Math.max(0, ceil(Math.max(0, days - TRAVEL_TOP_BONUS), casualTopWears(w)));
 
 function calculatePacking({ totalDays, workDays, mode, weather, overrides }) {
-  // Travel days = first and last day (assumed). Casual days = total − work − 2 travel.
   const travelDays = totalDays >= 2 ? 2 : 1;
   const casualDays = Math.max(0, totalDays - workDays - travelDays);
-
   const list = {};
 
-  // Socks & underwear — one per day, always
   list["Underwear"] = totalDays;
   list["Socks"] = totalDays;
 
-  // Sleep
-  list["Sleepwear"] = totalDays >= 4 ? 2 : 1;
-
   if (mode === "corporate") {
-    // Work: rig clothes OR black blacks — assume rig by default, black blacks for evening/meetings
-    // Day = rig shorts + rig t-shirt. Evening = full change into casual.
     list["Rig t-shirts"] = ceil(workDays, TOP_WEARS);
     list["Rig shorts"] = ceil(workDays, BOTTOM_WEARS);
-    // Black blacks — one set, worn for any formal moment
     list["Black shirt"] = 1;
     list["Black trousers"] = 1;
     list["Black shoes"] = 1;
-    // Evening casual — one outfit per work day evening + casual day
     const eveningDays = workDays + casualDays;
     list["Casual tops"] = calcCasualTops(eveningDays, weather);
     list["Casual bottoms"] = ceil(eveningDays + travelDays, BOTTOM_WEARS);
@@ -61,10 +59,8 @@ function calculatePacking({ totalDays, workDays, mode, weather, overrides }) {
   }
 
   if (mode === "rockroll") {
-    // Long work days, no evening out — fewer casual clothes
     list["Rig t-shirts"] = ceil(workDays, TOP_WEARS);
     list["Rig shorts"] = ceil(workDays, BOTTOM_WEARS);
-    // Casual only for days off (travel days covered by travel tops)
     list["Casual tops"] = calcCasualTops(casualDays, weather);
     list["Casual bottoms"] = Math.max(1, ceil(casualDays + travelDays, BOTTOM_WEARS));
     list["Travel tops"] = 2;
@@ -72,504 +68,364 @@ function calculatePacking({ totalDays, workDays, mode, weather, overrides }) {
   }
 
   if (mode === "holiday") {
-    // Pure leisure — bottoms 3 wears, tops weather-dependent
-    // Travel tops cover travel days + 1 bonus, casual tops cover the rest
     const nonTravelDays = Math.max(0, totalDays - travelDays);
     list["Casual tops"] = calcCasualTops(nonTravelDays, weather);
     list["Casual bottoms"] = ceil(totalDays, BOTTOM_WEARS);
     list["Travel tops"] = 2;
     list["Trainers/casual shoes"] = 1;
-    // One "smart" option for a nicer meal
-    if (totalDays >= 3) {
-      list["Smart shirt"] = 1;
-    }
+    if (totalDays >= 3) list["Smart shirt"] = 1;
   }
 
-  // Weather-driven swaps & additions
   const swaps = [];
   if (weather) {
     const { maxTemp, minTemp, rainChance } = weather;
-
-    if (rainChance >= 40) {
-      list["Waterproof jacket"] = 1;
-      swaps.push(`Rain likely (${rainChance}%) — waterproof added`);
-    }
-    if (maxTemp >= 25) {
-      list["Swimwear"] = 1;
-      swaps.push(`Hot (${maxTemp}°C max) — swimwear added`);
-    }
-    if (minTemp <= 12) {
-      list["Warm layer / hoodie"] = 1;
-      swaps.push(`Cool evenings (${minTemp}°C min) — warm layer added`);
-    }
-    if (maxTemp <= 15 && mode !== "corporate") {
-      // Swap shorts for trousers if cold and not corporate (corporate already has both)
-      if (list["Rig shorts"]) {
-        list["Rig trousers"] = list["Rig shorts"];
-        delete list["Rig shorts"];
-        swaps.push("Cold — rig shorts swapped for trousers");
-      }
+    if (rainChance >= 40) { list["Waterproof jacket"] = 1; swaps.push(`Rain likely (${rainChance}%) — waterproof added`); }
+    if (maxTemp >= 25) { list["Swimwear"] = 1; swaps.push(`Hot (${maxTemp}°C) — swimwear added`); }
+    if (minTemp <= 12) { list["Warm layer / hoodie"] = 1; swaps.push(`Cool evenings (${minTemp}°C) — warm layer added`); }
+    if (maxTemp <= 15 && mode !== "corporate" && list["Rig shorts"]) {
+      list["Rig trousers"] = list["Rig shorts"];
+      delete list["Rig shorts"];
+      swaps.push("Cold — rig shorts swapped for trousers");
     }
   }
 
-  // Toiletries — always
   list["Toiletries kit"] = 1;
 
-  // Apply overrides
-  Object.keys(overrides || {}).forEach((key) => {
-    if (overrides[key] === 0) {
-      delete list[key];
-    } else {
-      list[key] = overrides[key];
-    }
+  Object.keys(overrides || {}).forEach((k) => {
+    if (overrides[k] === 0) delete list[k];
+    else list[k] = overrides[k];
   });
 
   return { list, swaps, breakdown: { totalDays, workDays, casualDays, travelDays } };
 }
 
-// ───────────────────────────────────────────────────────────────
-// WEATHER — Open-Meteo (no API key)
-// ───────────────────────────────────────────────────────────────
+function estimateWeight(list) {
+  let total = 0;
+  Object.entries(list).forEach(([item, qty]) => {
+    total += (ITEM_WEIGHTS[item] || 200) * qty;
+  });
+  return total;
+}
 
+// ─────────────────────────────────────────────
+// WEATHER
+// ─────────────────────────────────────────────
 async function geocode(city) {
-  const r = await fetch(
-    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
-  );
+  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
   const d = await r.json();
-  if (!d.results || !d.results.length) throw new Error(`Can't find ${city}`);
+  if (!d.results?.length) throw new Error(`Can't find ${city}`);
   return d.results[0];
 }
 
-async function fetchForecast(lat, lon, startDate, endDate) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&start_date=${startDate}&end_date=${endDate}&timezone=auto`;
+async function fetchForecast(lat, lon, start, end) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&start_date=${start}&end_date=${end}&timezone=auto`;
   const r = await fetch(url);
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`Weather API ${r.status}: ${body.slice(0, 80)}`);
-  }
-  const d = await r.json();
-  return d.daily;
+  if (!r.ok) throw new Error(`Weather API ${r.status}`);
+  return (await r.json()).daily;
 }
 
-function summariseWeather(daily) {
-  if (!daily || !daily.temperature_2m_max) return null;
-  const maxTemp = Math.max(...daily.temperature_2m_max);
-  const minTemp = Math.min(...daily.temperature_2m_min);
-  const rainChance = Math.max(...(daily.precipitation_probability_max || [0]));
-  return { maxTemp, minTemp, rainChance, daily };
+function summarise(daily) {
+  if (!daily?.temperature_2m_max) return null;
+  return {
+    maxTemp: Math.max(...daily.temperature_2m_max),
+    minTemp: Math.min(...daily.temperature_2m_min),
+    rainChance: Math.max(...(daily.precipitation_probability_max || [0])),
+  };
 }
 
-function todayPlus(days) {
+function wxEmoji({ maxTemp, minTemp, rainChance }) {
+  if (rainChance >= 60) return "🌧️";
+  if (rainChance >= 40) return "🌦️";
+  if (maxTemp >= 28) return "☀️";
+  if (maxTemp >= 22) return "🌤️";
+  if (maxTemp >= 15) return "⛅";
+  if (minTemp <= 5) return "🥶";
+  return "☁️";
+}
+
+function todayPlus(n) {
   const d = new Date();
-  d.setDate(d.getDate() + days);
+  d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
-// ───────────────────────────────────────────────────────────────
-// UI
-// ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// THEME
+// ─────────────────────────────────────────────
+const THEMES = {
+  corporate: { bg: "#F7F5F2", card: "#FFFFFF", text: "#1a1a1a", muted: "#8a8680", accent: "#2D5016", border: "#E0DDD8", pill: "#EAE7E2" },
+  rockroll:  { bg: "#F5F4F0", card: "#FFFFFF", text: "#1a1a1a", muted: "#8a8680", accent: "#8B1A1A", border: "#E0DDD8", pill: "#EAE7E2" },
+  holiday:   { bg: "#F2F6F5", card: "#FFFFFF", text: "#1a1a1a", muted: "#8a8680", accent: "#1A5C5C", border: "#D8E5E4", pill: "#E2EDEC" },
+};
 
+// ─────────────────────────────────────────────
+// APP
+// ─────────────────────────────────────────────
 export default function PackingApp() {
   const [totalDays, setTotalDays] = useState(5);
-  const [workDays, setWorkDays] = useState(3);
-  const [mode, setMode] = useState("corporate");
-  const [destinations, setDestinations] = useState("London");
-  const [startOffset, setStartOffset] = useState(0); // days from today
-  const [weather, setWeather] = useState(null);
-  const [weatherStatus, setWeatherStatus] = useState("");
-  const [overrides, setOverrides] = useState({});
+  const [workDays, setWorkDays]   = useState(3);
+  const [mode, setMode]           = useState("corporate");
+  const [destinations, setDests]  = useState("London");
+  const [weather, setWeather]     = useState(null);
+  const [wxStatus, setWxStatus]   = useState("");
   const [destDetails, setDestDetails] = useState([]);
+  const [overrides, setOverrides] = useState({});
+  const [packMode, setPackMode]   = useState(false);
+  const [packed, setPacked]       = useState({});
 
-  // Pull weather whenever destinations or dates change
+  // Weather fetch — always next 7 days
   useEffect(() => {
     let cancelled = false;
     async function go() {
-      setWeatherStatus("Fetching weather…");
+      setWxStatus("fetching…");
       try {
-        const cities = destinations
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        // Open-Meteo free forecast only goes 16 days from today
-        const MAX_FORECAST_DAYS = 16;
-        const requestedEnd = startOffset + totalDays - 1;
-        const cappedEnd = Math.min(requestedEnd, MAX_FORECAST_DAYS - 1);
-        const startDate = todayPlus(Math.min(startOffset, MAX_FORECAST_DAYS - 1));
-        const endDate = todayPlus(Math.max(cappedEnd, startOffset));
-        const truncated = requestedEnd > MAX_FORECAST_DAYS - 1;
-        const all = [];
-        const details = [];
+        const cities = destinations.split(",").map(s => s.trim()).filter(Boolean);
+        const start = todayPlus(0), end = todayPlus(6);
+        const all = [], details = [];
         for (const city of cities) {
           try {
             const g = await geocode(city);
-            const daily = await fetchForecast(g.latitude, g.longitude, startDate, endDate);
-            const summary = summariseWeather(daily);
-            if (summary) {
-              all.push(summary);
-              details.push({
-                name: `${g.name}, ${g.country_code}`,
-                maxTemp: summary.maxTemp,
-                minTemp: summary.minTemp,
-                rainChance: summary.rainChance,
-              });
-            }
-          } catch (e) {
-            details.push({ name: city, error: e.message });
-          }
+            const daily = await fetchForecast(g.latitude, g.longitude, start, end);
+            const s = summarise(daily);
+            if (s) { all.push(s); details.push({ name: `${g.name}, ${g.country_code}`, ...s }); }
+          } catch (e) { details.push({ name: city, error: e.message }); }
         }
         if (cancelled) return;
         if (all.length) {
-          // Combine: worst-case across all destinations
-          const combined = {
-            maxTemp: Math.max(...all.map((a) => a.maxTemp)),
-            minTemp: Math.min(...all.map((a) => a.minTemp)),
-            rainChance: Math.max(...all.map((a) => a.rainChance)),
-          };
-          setWeather(combined);
+          setWeather({ maxTemp: Math.max(...all.map(a => a.maxTemp)), minTemp: Math.min(...all.map(a => a.minTemp)), rainChance: Math.max(...all.map(a => a.rainChance)) });
           setDestDetails(details);
-          setWeatherStatus(
-            truncated
-              ? `Forecast limited to next 16 days — packing for worst-case window`
-              : ""
-          );
-        } else {
-          setWeather(null);
-          setDestDetails(details);
-          setWeatherStatus("No weather data");
-        }
-      } catch (e) {
-        if (!cancelled) setWeatherStatus(`Error: ${e.message}`);
-      }
+          setWxStatus("");
+        } else { setWeather(null); setDestDetails(details); setWxStatus("No weather data"); }
+      } catch (e) { if (!cancelled) setWxStatus(`Error: ${e.message}`); }
     }
     if (destinations.trim()) go();
-    return () => {
-      cancelled = true;
-    };
-  }, [destinations, totalDays, startOffset]);
+    return () => { cancelled = true; };
+  }, [destinations]);
 
-  const { list, swaps, breakdown } = calculatePacking({
-    totalDays,
-    workDays: mode === "holiday" ? 0 : workDays,
-    mode,
-    weather,
-    overrides,
+  const { list, swaps, breakdown } = calculatePacking({ totalDays, workDays: mode === "holiday" ? 0 : workDays, mode, weather, overrides });
+
+  const adjust = (item, delta) => setOverrides(o => {
+    const cur = o[item] ?? list[item] ?? 0;
+    return { ...o, [item]: Math.max(0, cur + delta) };
   });
 
-  const adjust = (item, delta) => {
-    setOverrides((o) => {
-      const current = o[item] ?? list[item] ?? 0;
-      const next = Math.max(0, current + delta);
-      return { ...o, [item]: next };
-    });
-  };
+  const togglePacked = (item) => setPacked(p => ({ ...p, [item]: !p[item] }));
 
-  const reset = () => setOverrides({});
+  const enterPackMode = () => { setPackMode(true); setPacked({}); };
+  const exitPackMode  = () => { setPackMode(false); setPacked({}); };
 
-  const modeStyles = {
-    corporate: { bg: "#1a1a2e", accent: "#e94560" },
-    rockroll: { bg: "#0f0f0f", accent: "#ff6b35" },
-    holiday: { bg: "#1e4d4d", accent: "#ffd166" },
+  const packedCount  = Object.values(packed).filter(Boolean).length;
+  const totalItems   = Object.keys(list).length;
+  const weightG      = estimateWeight(list);
+  const weightKg     = (weightG / 1000).toFixed(1);
+
+  const t = THEMES[mode];
+
+  const inputStyle = {
+    width: "100%", padding: "10px 14px", background: t.card,
+    border: `1.5px solid ${t.border}`, borderRadius: 8, color: t.text,
+    fontSize: 15, fontFamily: "inherit", boxSizing: "border-box", outline: "none",
+    transition: "border-color 0.2s",
   };
-  const theme = modeStyles[mode];
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: theme.bg,
-        color: "#f5f5f5",
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        padding: "24px",
-      }}
-    >
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Georgia', 'Times New Roman', serif", padding: "32px 20px" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap');
+        * { box-sizing: border-box; }
+        .pack-item { transition: opacity 0.3s, transform 0.2s; }
+        .pack-item.done { opacity: 0.32; }
+        .check-circle { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s, border-color 0.2s; }
+        .mode-pill { padding: 8px 18px; border-radius: 20px; border: none; cursor: pointer; font-size: 13px; letter-spacing: 0.5px; font-family: inherit; transition: all 0.2s; }
+        .num-btn { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; transition: all 0.15s; }
+      `}</style>
+
+      <div style={{ maxWidth: 580, margin: "0 auto" }}>
+
         {/* Header */}
-        <div style={{ borderBottom: `3px solid ${theme.accent}`, paddingBottom: 16, marginBottom: 24 }}>
-          <h1 style={{ fontSize: 36, margin: 0, letterSpacing: "-1px", fontWeight: 900 }}>
-            TALLY<span style={{ color: theme.accent }}>.</span>
+        <div style={{ marginBottom: 36 }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 52, fontWeight: 300, letterSpacing: "-1px", margin: 0, color: t.text }}>
+            Tally
           </h1>
-          <p style={{ margin: "4px 0 0", opacity: 0.7, fontSize: 14, fontStyle: "italic" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: t.muted, letterSpacing: "0.5px", fontStyle: "italic" }}>
             Less in the bag. More on the road.
           </p>
         </div>
 
-        {/* Mode selector */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          {[
-            { id: "corporate", label: "Corporate" },
-            { id: "rockroll", label: "Rock & Roll" },
-            { id: "holiday", label: "Holiday" },
-          ].map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-                setMode(m.id);
-                setOverrides({});
-              }}
-              style={{
-                flex: 1,
-                padding: "12px",
-                background: mode === m.id ? theme.accent : "transparent",
-                color: mode === m.id ? "#000" : "#f5f5f5",
-                border: `1px solid ${mode === m.id ? theme.accent : "#444"}`,
-                cursor: "pointer",
-                fontSize: 13,
-                fontFamily: "inherit",
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                fontWeight: 700,
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {/* Mode pills */}
+        {!packMode && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" }}>
+            {[{ id: "corporate", label: "Corporate" }, { id: "rockroll", label: "Rock & Roll" }, { id: "holiday", label: "Holiday" }].map(m => (
+              <button key={m.id} className="mode-pill"
+                onClick={() => { setMode(m.id); setOverrides({}); }}
+                style={{
+                  background: mode === m.id ? t.accent : t.pill,
+                  color: mode === m.id ? "#fff" : t.muted,
+                  fontWeight: mode === m.id ? 600 : 400,
+                }}
+              >{m.label}</button>
+            ))}
+          </div>
+        )}
 
         {/* Inputs */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <Field label="Total days (inc. travel)">
-            <NumInput value={totalDays} onChange={setTotalDays} min={1} max={60} />
-          </Field>
-          {mode !== "holiday" && (
-            <Field label="Work days">
-              <NumInput value={workDays} onChange={setWorkDays} min={0} max={totalDays} />
+        {!packMode && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: mode !== "holiday" ? "1fr 1fr" : "1fr", gap: 12, marginBottom: 12 }}>
+              <Field label="Days away" t={t}>
+                <NumInput value={totalDays} onChange={v => setTotalDays(v)} min={1} max={60} style={inputStyle} />
+              </Field>
+              {mode !== "holiday" && (
+                <Field label="Work days" t={t}>
+                  <NumInput value={workDays} onChange={v => setWorkDays(v)} min={0} max={totalDays} style={inputStyle} />
+                </Field>
+              )}
+            </div>
+            <Field label="Where you're going" t={t}>
+              <input type="text" value={destinations} onChange={e => setDests(e.target.value)}
+                placeholder="London, Oslo, Helsinki" style={inputStyle} />
             </Field>
-          )}
-          <Field label="Days from today (start)">
-            <NumInput value={startOffset} onChange={setStartOffset} min={0} max={14} />
-          </Field>
-        </div>
 
-        <Field label="Destinations (comma-separated)">
-          <input
-            type="text"
-            value={destinations}
-            onChange={(e) => setDestinations(e.target.value)}
-            placeholder="London, Berlin, Paris"
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid #444",
-              color: "#fff",
-              fontSize: 15,
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-            }}
-          />
-        </Field>
-
-        {/* Breakdown */}
-        <div
-          style={{
-            marginTop: 20,
-            padding: "12px 16px",
-            background: "rgba(255,255,255,0.04)",
-            borderLeft: `3px solid ${theme.accent}`,
-            fontSize: 13,
-            opacity: 0.85,
-          }}
-        >
-          <strong>{breakdown.totalDays} days total</strong> · {breakdown.travelDays} travel ·{" "}
-          {breakdown.workDays} work · {breakdown.casualDays} casual
-        </div>
+            {/* Trip breakdown */}
+            <div style={{ marginTop: 16, padding: "10px 14px", background: t.pill, borderRadius: 8, fontSize: 13, color: t.muted, display: "flex", gap: 16 }}>
+              <span>✈️ {breakdown.travelDays} travel</span>
+              {breakdown.workDays > 0 && <span>💼 {breakdown.workDays} work</span>}
+              {breakdown.casualDays > 0 && <span>🌅 {breakdown.casualDays} off</span>}
+            </div>
+          </>
+        )}
 
         {/* Weather */}
-        <div style={{ marginTop: 20 }}>
-          <SectionHeader theme={theme}>Weather</SectionHeader>
-          {weatherStatus && <p style={{ fontSize: 13, opacity: 0.7 }}>{weatherStatus}</p>}
-          {destDetails.length > 0 && (
-            <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
-              {destDetails.map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    background: "rgba(255,255,255,0.03)",
-                  }}
-                >
-                  <span>{d.name}</span>
-                  <span style={{ opacity: 0.8 }}>
-                    {d.error
-                      ? d.error
-                      : `${Math.round(d.minTemp)}–${Math.round(d.maxTemp)}°C · ${d.rainChance}% rain`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+        {!packMode && (
+          <div style={{ marginTop: 24 }}>
+            <Label t={t}>Weather · next 7 days</Label>
+            {wxStatus && <p style={{ fontSize: 13, color: t.muted, margin: "6px 0 0", fontStyle: "italic" }}>{wxStatus}</p>}
+            {destDetails.map((d, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${t.border}`, fontSize: 14 }}>
+                <span style={{ color: t.text }}>{d.name}</span>
+                <span style={{ color: t.muted }}>
+                  {d.error ? d.error : `${wxEmoji(d)} ${Math.round(d.minTemp)}–${Math.round(d.maxTemp)}°C · ${d.rainChance}% rain`}
+                </span>
+              </div>
+            ))}
+            {swaps.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 12, color: t.muted, fontStyle: "italic", lineHeight: 1.7 }}>
+                {swaps.map((s, i) => <div key={i}>↳ {s}</div>)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Divider + controls */}
+        <div style={{ marginTop: 28, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <Label t={t}>{packMode ? `Packing — ${packedCount} of ${totalItems} done` : "The list"}</Label>
+          <button
+            onClick={packMode ? exitPackMode : enterPackMode}
+            style={{
+              padding: "7px 18px", borderRadius: 20, border: `1.5px solid ${t.accent}`,
+              background: packMode ? t.accent : "transparent",
+              color: packMode ? "#fff" : t.accent,
+              fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+              letterSpacing: "0.5px", transition: "all 0.2s",
+            }}
+          >
+            {packMode ? "✓ Done" : "Pack mode"}
+          </button>
         </div>
 
-        {/* Swaps */}
-        {swaps.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <SectionHeader theme={theme}>Weather adjustments</SectionHeader>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, opacity: 0.85 }}>
-              {swaps.map((s, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>
-                  {s}
-                </li>
-              ))}
-            </ul>
+        {/* Pack progress bar */}
+        {packMode && (
+          <div style={{ height: 3, background: t.border, borderRadius: 2, marginBottom: 20, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${(packedCount / totalItems) * 100}%`, background: t.accent, borderRadius: 2, transition: "width 0.3s" }} />
           </div>
         )}
 
         {/* Packing list */}
-        <div style={{ marginTop: 24 }}>
-          <SectionHeader theme={theme}>The list</SectionHeader>
-          <div style={{ display: "grid", gap: 4 }}>
-            {Object.entries(list).map(([item, qty]) => (
-              <div
-                key={item}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  background: "rgba(255,255,255,0.04)",
-                  borderLeft: `2px solid ${theme.accent}`,
-                }}
-              >
-                <span style={{ flex: 1, fontSize: 15 }}>{item}</span>
-                <button
-                  onClick={() => adjust(item, -1)}
-                  style={btnStyle(theme)}
-                  aria-label={`reduce ${item}`}
-                >
-                  −
-                </button>
-                <span
-                  style={{
-                    minWidth: 32,
-                    textAlign: "center",
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: theme.accent,
-                  }}
-                >
-                  {qty}
-                </span>
-                <button
-                  onClick={() => adjust(item, 1)}
-                  style={btnStyle(theme)}
-                  aria-label={`add ${item}`}
-                >
-                  +
-                </button>
+        <div style={{ display: "grid", gap: 2 }}>
+          {Object.entries(list).map(([item, qty]) => {
+            const isDone = packed[item];
+            const wg = (ITEM_WEIGHTS[item] || 200) * qty;
+            return (
+              <div key={item} className={`pack-item${isDone ? " done" : ""}`}
+                style={{ display: "flex", alignItems: "center", padding: "13px 0", borderBottom: `1px solid ${t.border}`, gap: 14 }}>
+
+                {/* Check circle (pack mode only) */}
+                {packMode && (
+                  <div className="check-circle"
+                    onClick={() => togglePacked(item)}
+                    style={{ borderColor: isDone ? t.accent : t.border, background: isDone ? t.accent : "transparent" }}>
+                    {isDone && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
+                  </div>
+                )}
+
+                {/* Item name */}
+                <span style={{ flex: 1, fontSize: 16, color: t.text, textDecoration: isDone ? "line-through" : "none" }}>{item}</span>
+
+                {/* Weight hint */}
+                <span style={{ fontSize: 11, color: t.muted, minWidth: 44, textAlign: "right" }}>~{wg >= 1000 ? `${(wg/1000).toFixed(1)}kg` : `${wg}g`}</span>
+
+                {/* Qty controls (plan mode only) */}
+                {!packMode && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button className="num-btn" onClick={() => adjust(item, -1)}
+                      style={{ borderColor: t.border, color: t.muted }}>−</button>
+                    <span style={{ minWidth: 20, textAlign: "center", fontSize: 16, fontWeight: 600, color: t.accent }}>{qty}</span>
+                    <button className="num-btn" onClick={() => adjust(item, 1)}
+                      style={{ borderColor: t.border, color: t.muted }}>+</button>
+                  </div>
+                )}
+
+                {/* Qty (pack mode — static) */}
+                {packMode && (
+                  <span style={{ fontSize: 15, fontWeight: 600, color: t.accent, minWidth: 20, textAlign: "center" }}>{qty}</span>
+                )}
               </div>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* Weight total + reset */}
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 13, color: t.muted }}>
+            Estimated bag weight
+            <span style={{ fontSize: 22, fontWeight: 300, color: t.text, fontFamily: "'Cormorant Garamond', serif", display: "block", lineHeight: 1.2 }}>
+              ~{weightKg} kg
+            </span>
           </div>
-          {Object.keys(overrides).length > 0 && (
-            <button
-              onClick={reset}
-              style={{
-                marginTop: 12,
-                padding: "8px 16px",
-                background: "transparent",
-                border: `1px solid ${theme.accent}`,
-                color: theme.accent,
-                cursor: "pointer",
-                fontSize: 12,
-                fontFamily: "inherit",
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-              }}
-            >
+          {!packMode && Object.keys(overrides).length > 0 && (
+            <button onClick={() => setOverrides({})}
+              style={{ fontSize: 12, color: t.muted, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}>
               Reset to calculated
             </button>
           )}
         </div>
 
         {/* Footer */}
-        <div
-          style={{
-            marginTop: 32,
-            paddingTop: 16,
-            borderTop: "1px solid #333",
-            fontSize: 11,
-            opacity: 0.5,
-            textAlign: "center",
-          }}
-        >
-          Work tops: 2 wears · Casual: 2 hot / 3 cool · Bottoms: 3 wears · Travel top reused once · Socks/UW: 1 use
+        <div style={{ marginTop: 40, paddingTop: 20, borderTop: `1px solid ${t.border}`, fontSize: 11, color: t.muted, lineHeight: 1.8 }}>
+          Work tops · 2 wears &nbsp;·&nbsp; Casual tops · 2 hot / 3 cool &nbsp;·&nbsp; Bottoms · 3 wears &nbsp;·&nbsp; Travel top reused once &nbsp;·&nbsp; Socks/UW · 1 use
         </div>
+
       </div>
     </div>
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, t, children }) {
   return (
     <div>
-      <label
-        style={{
-          display: "block",
-          fontSize: 11,
-          letterSpacing: "1.5px",
-          textTransform: "uppercase",
-          opacity: 0.6,
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </label>
+      <label style={{ display: "block", fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: t.muted, marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   );
 }
 
-function NumInput({ value, onChange, min, max }) {
-  return (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-      style={{
-        width: "100%",
-        padding: "10px 12px",
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid #444",
-        color: "#fff",
-        fontSize: 15,
-        fontFamily: "inherit",
-        boxSizing: "border-box",
-      }}
-    />
-  );
+function Label({ t, children }) {
+  return <p style={{ fontSize: 11, letterSpacing: "1px", textTransform: "uppercase", color: t.muted, margin: "0 0 4px" }}>{children}</p>;
 }
 
-function SectionHeader({ children, theme }) {
+function NumInput({ value, onChange, min, max, style }) {
   return (
-    <h2
-      style={{
-        fontSize: 12,
-        letterSpacing: "2px",
-        textTransform: "uppercase",
-        color: theme.accent,
-        margin: "0 0 10px",
-        fontWeight: 700,
-      }}
-    >
-      {children}
-    </h2>
+    <input type="number" value={value} min={min} max={max}
+      onChange={e => onChange(parseInt(e.target.value) || 0)} style={style} />
   );
-}
-
-function btnStyle(theme) {
-  return {
-    width: 28,
-    height: 28,
-    background: "transparent",
-    border: `1px solid ${theme.accent}`,
-    color: theme.accent,
-    cursor: "pointer",
-    fontSize: 16,
-    fontFamily: "inherit",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
 }
