@@ -60,10 +60,17 @@ const WEIGHTS = {
   "Work t-shirts (rig)": 220, "Rig shorts": 300, "Rig trousers": 440,
   "Work shorts": 300, "Work shorts (optional)": 300,
   "Work trousers / combats": 440, "Work trousers / combats (1 pair)": 440,
+  "Work hoodie / zip": 520,
   "Black shirt": 260, "Black trousers": 480, "Black shoes": 880,
-  "Trainers": 750, "Waterproof jacket": 420, "Warm mid-layer": 580,
-  "Heavy coat": 1200, "Base layer top": 180, "Swimwear": 160,
-  "Underwear": 40, "Socks": 55, "Toiletries": 750,
+  "Trainers": 750, "Waterproof jacket": 420, "Packable waterproof": 420,
+  "Summer jumper / light knit": 280,
+  "Lightweight jumper": 340,
+  "Mid-weight jumper": 420,
+  "Jumper / knitwear": 480,
+  "Casual jacket / mid-layer": 580,
+  "Heavy knit jumper": 600,
+  "Warm mid-layer": 580, "Heavy coat": 1200, "Base layer top": 180,
+  "Swimwear": 160, "Underwear": 40, "Socks": 55, "Toiletries": 750,
 };
 
 const wFmt = (g) => g >= 1000 ? `${(g/1000).toFixed(1)}kg` : `${g}g`;
@@ -254,47 +261,39 @@ function buildAdvisory({ totalDays, workDays, mode, band }) {
     weight: WEIGHTS["Trainers"],
   });
 
+  // ── WORK HOODIE / ZIP — site layer ────────
+  if (mode !== "holiday" && workDays > 0 && !isHot) {
+    cards.push({
+      category: "Work hoodie / zip", qty: 1, emoji: "🤐",
+      reason: isWarm
+        ? "A lightweight zip for site. Mornings and evenings on the rig can be cooler than you expect. One does the whole trip."
+        : isMild
+          ? "Site layer — zip or pull-over hoodie over the rig tee or polo. Keeps you warm without getting in the way."
+          : "Essential on site. Wear over the rig tee or polo all day if needed. Heavy enough for the work environment, light enough to ditch.",
+      weight: 520,
+    });
+  }
+
+  // ── WATERPROOF — rain flag ─────────────────
   if (isRain) {
     cards.push({
       category: "Packable waterproof", qty: 1, emoji: "🌧️",
       reason: isHot
-        ? "Rain in the heat — packable shell weighs nothing and saves a soaking."
-        : (isMild || isWarm) ? "Rain expected — waterproof replaces the hoodie. One layer, two jobs."
-        : "Wet and cold is the worst combination. Waterproof shell, warm layer underneath.",
+        ? "Rain in the heat — a packable shell folds to nothing and saves a soaking."
+        : (isMild || isWarm)
+          ? "Rain expected — waterproof handles both the rain and the wind. One layer, two jobs."
+          : "Wet and cold is the worst combination. Shell on top, everything warm underneath.",
       weight: WEIGHTS["Waterproof jacket"],
     });
   }
 
-  if (isCool || isCold || (isMild && !isRain)) {
-    const layerLbl = isCold ? "Heavy coat" : "Warm mid-layer";
-    cards.push({
-      category: layerLbl, qty: 1, emoji: isCold ? "🧥" : "🫙",
-      reason: isCold
-        ? "Wear the coat on the plane — heaviest item, zero bag cost if it's on your back."
-        : isCool ? "Fleece or light jacket. Goes over any shirt, keeps evenings civilised."
-        : "Light layer for evenings. One is enough.",
-      weight: WEIGHTS[layerLbl],
-    });
-    if (isCool || isCold) {
-      cards.push({
-        category: "Jumper / knitwear", qty: 1, emoji: "🧶",
-        reason: isCold
-          ? "Merino or fine knit under the coat, over a shirt. Looks sharp for an evening. Merino handles 3+ wears."
-          : "Smart knit for the evening. Over a casual shirt it reads well. 2–3 wears comfortably.",
-        weight: 480,
-      });
-    }
-  }
-
-  if (isCold) {
-    cards.push({
-      category: "Base layer top", qty: 1, emoji: "🧤",
-      reason: "Thin merino thermal. Under everything. One is enough — merino handles 3+ wears without issue.",
-      weight: WEIGHTS["Base layer top"],
-    });
-  }
-
+  // ── CASUAL EVENING LAYERS — by band ───────
   if (isHot) {
+    cards.push({
+      category: "Summer jumper / light knit", qty: 1, emoji: "🌙",
+      reason: "Even in the heat, evenings drop off. A thin cotton or linen knit over a shirt — looks sharp, weighs nothing.",
+      weight: 280,
+    });
     cards.push({
       category: "Swimwear", qty: 1, emoji: "🩱",
       reason: "It's hot. Pool, beach, rooftop — you'll want it. Weighs nothing.",
@@ -302,6 +301,52 @@ function buildAdvisory({ totalDays, workDays, mode, band }) {
     });
   }
 
+  if (isWarm) {
+    cards.push({
+      category: "Lightweight jumper", qty: 1, emoji: "🧥",
+      reason: "Warm days but evenings cool off. A merino or fine-knit lightweight jumper. Smart enough for dinner, 3+ wears.",
+      weight: 340,
+    });
+  }
+
+  if (isMild) {
+    cards.push({
+      category: "Mid-weight jumper", qty: 1, emoji: "🧶",
+      reason: "Mild means a proper jumper for evenings — not a hoodie, a real mid-weight knit. Merino if you have it.",
+      weight: 420,
+    });
+  }
+
+  if (isCool) {
+    cards.push({
+      category: "Jumper / knitwear", qty: 1, emoji: "🧶",
+      reason: "Cool evenings need a proper knit. Under a jacket, over a shirt — looks put together. Merino handles 3+ wears.",
+      weight: 480,
+    });
+    cards.push({
+      category: "Casual jacket / mid-layer", qty: 1, emoji: "🫙",
+      reason: "Fleece, light down, or smart bomber over the jumper. Wear on the plane if it's bulky.",
+      weight: 580,
+    });
+  }
+
+  if (isCold) {
+    cards.push({
+      category: "Heavy knit jumper", qty: 1, emoji: "🧶",
+      reason: "A thick knit — wool or heavy merino. Under the coat, over a shirt. Good for an evening indoors.",
+      weight: 600,
+    });
+    cards.push({
+      category: "Heavy coat", qty: 1, emoji: "🧥",
+      reason: "Wear it on the plane — heaviest single item, costs nothing in bag space if it's on your back.",
+      weight: WEIGHTS["Heavy coat"],
+    });
+    cards.push({
+      category: "Base layer top", qty: 1, emoji: "🧤",
+      reason: "Thin merino thermal under everything. One is enough — merino handles 3+ wears without issue.",
+      weight: WEIGHTS["Base layer top"],
+    });
+  }
   cards.push({
     category: "Toiletries", qty: 1, emoji: "🪥",
     reason: "One pre-packed bag. Refillable 100ml bottles, solid deodorant. Never repack from scratch.",
