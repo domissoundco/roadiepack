@@ -95,61 +95,97 @@ function buildAdvisory({ totalDays, workDays, mode, band }) {
       isSection: true,
     });
 
-    // TOPS — polo for corporate, rig tee for rock & roll
-    const workTopQty = wearDays(workDays, 2);
+    // Corporate schedule logic:
+    // Rig days (heavy work) → rig t-shirt
+    // Rehearsal days → polo
+    // Show days → show blacks (handled separately)
+    // Load-out → rig t-shirt + shorts
+    // Rock & Roll: all rig t-shirts
+
     if (mode === "corporate") {
-      cards.push({
-        category: "Polo shirts", qty: workTopQty, emoji: "👔",
-        reason: isHot
-          ? `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per polo. Hot out — a good polo breathes and reads smart. Keeps you out of the rig tee but not overdressed.`
-          : `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears each. Polo is the move for corporate site days — smarter than a tee, cooler than a shirt.`,
-        weight: 240 * workTopQty,
-      });
+      // Estimate day types from workDays
+      // Show days: typically last 1–2 work days (1 if ≤3 work days, 2 if more)
+      const showDays      = workDays >= 4 ? 2 : workDays >= 2 ? 1 : 0;
+      const rehearsalDays = workDays >= 3 ? 1 : 0;
+      const rigDays       = Math.max(0, workDays - showDays - rehearsalDays);
+      // Load-out: if there are rig days, last rig day is also load-out (already counted)
+      // Rig tees: rig days + 1 for load-out day if trip is long enough
+      const hasLoadOut    = workDays >= 4;
+      const rigTeeDays    = rigDays + (hasLoadOut ? 1 : 0);
+      const rigTeeQty     = Math.max(0, Math.ceil(rigTeeDays / 2));
+      const poloQty       = rehearsalDays > 0 ? 1 : 0;
+
+      if (rigTeeQty > 0) {
+        cards.push({
+          category: "Rig t-shirts", qty: rigTeeQty, emoji: "👕",
+          reason: hasLoadOut
+            ? `Rig days + load-out. ${rigDays} rig day${rigDays !== 1 ? "s" : ""} plus load-out day = ${rigTeeDays} wearing occasions, 2 wears per tee. These are workhorses — wear them hard.`
+            : `${rigDays} rig day${rigDays !== 1 ? "s" : ""}, 2 wears per tee.`,
+          weight: WEIGHTS["Work t-shirts (rig)"] * rigTeeQty,
+        });
+      }
+
+      if (poloQty > 0) {
+        cards.push({
+          category: "Polo shirts", qty: poloQty, emoji: "👔",
+          reason: `Rehearsal day${rehearsalDays > 1 ? "s" : ""}. Smarter than a rig tee, cooler than the show blacks. ${poloQty === 1 ? "One is enough." : `${poloQty} covers you.`}`,
+          weight: 240 * poloQty,
+        });
+      }
+
+      if (rigTeeQty === 0 && poloQty === 0) {
+        // Very short trip — just a polo
+        cards.push({
+          category: "Polo shirts", qty: 1, emoji: "👔",
+          reason: "Short trip — one polo covers work days.",
+          weight: 240,
+        });
+      }
+
     } else {
+      // Rock & Roll — all rig t-shirts
+      const rigTops = Math.ceil(workDays / 2);
       cards.push({
-        category: "Rig t-shirts", qty: workTopQty, emoji: "👕",
+        category: "Rig t-shirts", qty: rigTops, emoji: "👕",
         reason: `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per top. ${isHot ? "It's hot — keep it simple." : "Workhorses. Wear them hard."}`,
-        weight: WEIGHTS["Work t-shirts (rig)"] * workTopQty,
+        weight: WEIGHTS["Work t-shirts (rig)"] * rigTops,
       });
     }
 
-    // BOTTOMS — weather-driven with suggestion
-    const workShortsQty   = wearDays(workDays, 3);
-    const workTrousersQty = wearDays(workDays, 2);
+    // BOTTOMS — weather-driven
+    const workShortsQty   = Math.max(1, Math.ceil(workDays / 3));
+    const workTrousersQty = Math.max(1, Math.ceil(workDays / 2));
 
     if (isCold) {
-      // Definitely trousers, no shorts
       cards.push({
         category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
-        reason: `It's cold — work shorts stay at home. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or work trousers, 2 wears each. Practical and you won't freeze.`,
+        reason: `It's cold — work shorts stay at home. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or work trousers, 2 wears each.`,
         weight: WEIGHTS["Rig trousers"] * workTrousersQty,
       });
     } else if (isCool) {
-      // Suggest trousers, shorts as override
       cards.push({
         category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
-        reason: `Cool forecast — I'd go trousers over shorts for work. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or chinos, 2 wears each. Pack shorts too if the rig is heated.`,
+        reason: `Cool forecast — trousers over shorts for work. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""}, 2 wears each. Pack shorts too if the rig is heated indoors.`,
         weight: WEIGHTS["Rig trousers"] * workTrousersQty,
       });
       cards.push({
         category: "Work shorts (optional)", qty: 1, emoji: "🩳",
-        reason: "One pair if the work environment is warm indoors. Swap the trousers out if you don't end up needing both.",
+        reason: "One pair if the work environment is warm indoors. Drop them if you don't need both.",
         weight: WEIGHTS["Rig shorts"],
       });
     } else if (isMild || isWarm) {
-      // Shorts main, one pair trousers in case
       cards.push({
         category: "Work shorts", qty: workShortsQty, emoji: "🩳",
-        reason: `${workDays} work days, 3 wears per pair. Mild/warm — shorts are the call. ${workShortsQty} pair${workShortsQty > 1 ? "s" : ""} covers you.`,
+        reason: `${workDays} work days, 3 wears per pair. Mild/warm — shorts are the call.`,
         weight: WEIGHTS["Rig shorts"] * workShortsQty,
       });
       cards.push({
-        category: "Work trousers / combats (1 pair)", qty: 1, emoji: "👖",
-        reason: "One pair of combats in the bag. Colder days, smarter meetings, or just a change. Worth the space.",
+        category: "Work trousers / combats", qty: 1, emoji: "👖",
+        reason: "One pair of combats in the bag. Colder days, smarter moments, or just a change. Worth the space.",
         weight: WEIGHTS["Rig trousers"],
       });
     } else {
-      // Hot — shorts only
+      // Hot
       cards.push({
         category: "Work shorts", qty: workShortsQty, emoji: "🩳",
         reason: `Hot — shorts all the way. 3 wears per pair, ${workShortsQty} pair${workShortsQty > 1 ? "s" : ""} for ${workDays} work days. Leave the trousers at home.`,
