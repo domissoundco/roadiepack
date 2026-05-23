@@ -81,281 +81,246 @@ const WEIGHTS = {
 const wFmt = (g) => g >= 1000 ? `${(g/1000).toFixed(1)}kg` : `${g}g`;
 
 function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
-  const travelDays = totalDays >= 2 ? 2 : 1;
-  const casualDays = Math.max(0, totalDays - workDays - travelDays);
+  const travelDays  = totalDays >= 2 ? 2 : 1;
+  const casualDays  = Math.max(0, totalDays - workDays - travelDays);
+  const offDutyDays = casualDays + travelDays; // days not in work mode
+
   const isRain = band.includes("wet");
   const isHot  = band.startsWith("hot");
   const isWarm = band.startsWith("warm");
   const isMild = band.startsWith("mild");
   const isCool = band.startsWith("cool");
   const isCold = band.startsWith("cold");
+  const unknown = band === "unknown";
 
-  const wearDays = (days, wears) => Math.max(1, Math.ceil(days / wears));
   const cards = [];
 
+  // ── UNDERWEAR & SOCKS ─────────────────────────────────────
+  // 1 per day, always. Non-negotiable.
   cards.push({
     category: "Underwear & socks", qty: totalDays, emoji: "🩲",
-    reason: "One use each — no exceptions.",
+    reason: "One per day. Non-negotiable — no frequency traveller trick gets around this one.",
     weight: (WEIGHTS["Underwear"] + WEIGHTS["Socks"]) * totalDays,
   });
 
+  // ── WORKWEAR ──────────────────────────────────────────────
   if (mode !== "holiday" && workDays > 0) {
-    // ── WORKWEAR SECTION HEADER ────────────────
+    cards.push({ category: "__section_workwear", sectionLabel: "Workwear", isSection: true });
+
+    // TOPS
+    // Rig t-shirts: ALL modes with work days. Rule: ceil(workDays ÷ 2)
+    const rigTeeQty = Math.ceil(workDays / 2);
     cards.push({
-      category: "__section_workwear",
-      sectionLabel: "Workwear",
-      isSection: true,
+      category: "Rig t-shirts", qty: rigTeeQty, emoji: "👕",
+      reason: `${workDays} work day${workDays > 1 ? "s" : ""} ÷ 2 wears = ${rigTeeQty} tee${rigTeeQty > 1 ? "s" : ""}. ${isHot ? "Hot — a rig tee is all you need all day." : "Workhorses. Wear them hard, wash when you can."}`,
+      weight: WEIGHTS["Work t-shirts (rig)"] * rigTeeQty,
     });
 
-    // Corporate schedule logic:
-    // Rig days (heavy work) → rig t-shirt
-    // Rehearsal days → polo
-    // Show days → show blacks (handled separately)
-    // Load-out → rig t-shirt + shorts
-    // Rock & Roll: all rig t-shirts
-
-    if (mode === "corporate") {
-      // Estimate day types from workDays
-      // Show days: typically last 1–2 work days (1 if ≤3 work days, 2 if more)
-      const showDays      = workDays >= 4 ? 2 : workDays >= 2 ? 1 : 0;
-      const rehearsalDays = workDays >= 3 ? 1 : 0;
-      const rigDays       = Math.max(0, workDays - showDays - rehearsalDays);
-      // Load-out: if there are rig days, last rig day is also load-out (already counted)
-      // Rig tees: rig days + 1 for load-out day if trip is long enough
-      const hasLoadOut    = workDays >= 4;
-      const rigTeeDays    = rigDays + (hasLoadOut ? 1 : 0);
-      const rigTeeQty     = Math.max(0, Math.ceil(rigTeeDays / 2));
-      const poloQty       = rehearsalDays > 0 ? 1 : 0;
-
-      if (rigTeeQty > 0) {
-        cards.push({
-          category: "Rig t-shirts", qty: rigTeeQty, emoji: "👕",
-          reason: hasLoadOut
-            ? `Rig days + load-out. ${rigDays} rig day${rigDays !== 1 ? "s" : ""} plus load-out day = ${rigTeeDays} wearing occasions, 2 wears per tee. These are workhorses — wear them hard.`
-            : `${rigDays} rig day${rigDays !== 1 ? "s" : ""}, 2 wears per tee.`,
-          weight: WEIGHTS["Work t-shirts (rig)"] * rigTeeQty,
-        });
-      }
-
-      if (poloQty > 0) {
-        cards.push({
-          category: "Polo shirts", qty: poloQty, emoji: "👔",
-          reason: `Rehearsal day${rehearsalDays > 1 ? "s" : ""}. Smarter than a rig tee, cooler than the show blacks. ${poloQty === 1 ? "One is enough." : `${poloQty} covers you.`}`,
-          weight: 240 * poloQty,
-        });
-      }
-
-      if (rigTeeQty === 0 && poloQty === 0) {
-        // Very short trip — just a polo
-        cards.push({
-          category: "Polo shirts", qty: 1, emoji: "👔",
-          reason: "Short trip — one polo covers work days.",
-          weight: 240,
-        });
-      }
-
-    } else {
-      // Rock & Roll — all rig t-shirts
-      const rigTops = Math.ceil(workDays / 2);
+    // Polo shirts: Corporate only, for rehearsal days
+    // Rehearsal days = 1 if workDays ≥ 3, else 0
+    if (mode === "corporate" && workDays >= 3) {
+      const rehearsalDays = 1;
+      const poloQty = Math.ceil(rehearsalDays / 2);
       cards.push({
-        category: "Rig t-shirts", qty: rigTops, emoji: "👕",
-        reason: `${workDays} work day${workDays > 1 ? "s" : ""}, 2 wears per top. ${isHot ? "It's hot — keep it simple." : "Workhorses. Wear them hard."}`,
-        weight: WEIGHTS["Work t-shirts (rig)"] * rigTops,
+        category: "Polo shirts", qty: poloQty, emoji: "👔",
+        reason: "Rehearsal day — smarter than a rig tee, cooler than the show blacks. One polo covers it. 2 wears if needed.",
+        weight: 240 * poloQty,
       });
     }
 
-    // BOTTOMS — weather-driven
-    const workShortsQty   = Math.max(1, Math.ceil(workDays / 3));
-    const workTrousersQty = Math.max(1, Math.ceil(workDays / 2));
+    // BOTTOMS — weather drives shorts vs trousers, wear rules confirmed:
+    // Shorts: max 3 wears. Trousers/smarts: max 2 wears.
+    const shortsDays    = Math.ceil(workDays / 3);
+    const trousersDays  = Math.ceil(workDays / 2);
 
-    if (isCold) {
+    if (isHot) {
+      // Hot: shorts only, no trousers
       cards.push({
-        category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
-        reason: `It's cold — work shorts stay at home. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""} of combats or work trousers, 2 wears each.`,
-        weight: WEIGHTS["Rig trousers"] * workTrousersQty,
+        category: "Work shorts", qty: shortsDays, emoji: "🩳",
+        reason: `${workDays} work days, 3 wears per pair = ${shortsDays} pair${shortsDays > 1 ? "s" : ""}. Hot — shorts all the way, leave trousers at home.`,
+        weight: WEIGHTS["Rig shorts"] * shortsDays,
       });
-    } else if (isCool) {
+    } else if (isWarm || isMild) {
+      // Warm/mild: shorts main, one pair of combats in case
       cards.push({
-        category: "Work trousers / combats", qty: workTrousersQty, emoji: "👖",
-        reason: `Cool forecast — trousers over shorts for work. ${workTrousersQty} pair${workTrousersQty > 1 ? "s" : ""}, 2 wears each. Pack shorts too if the rig is heated indoors.`,
-        weight: WEIGHTS["Rig trousers"] * workTrousersQty,
-      });
-      cards.push({
-        category: "Work shorts (optional)", qty: 1, emoji: "🩳",
-        reason: "One pair if the work environment is warm indoors. Drop them if you don't need both.",
-        weight: WEIGHTS["Rig shorts"],
-      });
-    } else if (isMild || isWarm) {
-      cards.push({
-        category: "Work shorts", qty: workShortsQty, emoji: "🩳",
-        reason: `${workDays} work days, 3 wears per pair. Mild/warm — shorts are the call.`,
-        weight: WEIGHTS["Rig shorts"] * workShortsQty,
+        category: "Work shorts", qty: shortsDays, emoji: "🩳",
+        reason: `${workDays} work days, 3 wears per pair = ${shortsDays} pair${shortsDays > 1 ? "s" : ""}. ${isWarm ? "Warm" : "Mild"} — shorts are the call on site.`,
+        weight: WEIGHTS["Rig shorts"] * shortsDays,
       });
       cards.push({
         category: "Work trousers / combats", qty: 1, emoji: "👖",
-        reason: "One pair of combats in the bag. Colder days, smarter moments, or just a change. Worth the space.",
+        reason: "One pair of combats. Colder days, smarter moments, load-in with kit. Worth the space every time.",
         weight: WEIGHTS["Rig trousers"],
       });
-    } else {
-      // Hot
+    } else if (isCool) {
+      // Cool: trousers main, shorts optional if rig is heated
       cards.push({
-        category: "Work shorts", qty: workShortsQty, emoji: "🩳",
-        reason: `Hot — shorts all the way. 3 wears per pair, ${workShortsQty} pair${workShortsQty > 1 ? "s" : ""} for ${workDays} work days. Leave the trousers at home.`,
-        weight: WEIGHTS["Rig shorts"] * workShortsQty,
+        category: "Work trousers / combats", qty: trousersDays, emoji: "👖",
+        reason: `${workDays} work days, 2 wears per pair = ${trousersDays} pair${trousersDays > 1 ? "s" : ""}. Cool forecast — trousers over shorts on site.`,
+        weight: WEIGHTS["Rig trousers"] * trousersDays,
+      });
+      cards.push({
+        category: "Work shorts (optional)", qty: 1, emoji: "🩳",
+        reason: "One pair in the bag if the venue is warm indoors. Drop them if the forecast doesn't warm up.",
+        weight: WEIGHTS["Rig shorts"],
+      });
+    } else {
+      // Cold or unknown: trousers only
+      cards.push({
+        category: "Work trousers / combats", qty: trousersDays, emoji: "👖",
+        reason: `${workDays} work days, 2 wears per pair = ${trousersDays} pair${trousersDays > 1 ? "s" : ""}. ${isCold ? "Cold — shorts stay at home." : "Go with trousers as the safe bet."}`,
+        weight: WEIGHTS["Rig trousers"] * trousersDays,
+      });
+    }
+
+    // Work hoodie / zip — site layer, not an evening layer
+    if (!isHot) {
+      cards.push({
+        category: "Work hoodie / zip", qty: 1, emoji: "🤐",
+        reason: isWarm
+          ? "A lightweight zip for site. Mornings on the rig can catch you out. One does the whole trip."
+          : isMild
+            ? "Site layer over the rig tee or polo. Keeps you warm without getting in the way."
+            : "Essential on site. Wear all day if needed — heavy enough for the work environment, light enough to ditch.",
+        weight: 520,
+      });
+    }
+
+    // Show blacks — corporate only, 2 wears per set
+    if (mode === "corporate") {
+      const showQty = workDays > 4 ? 2 : 1;
+      cards.push({
+        category: "Show blacks", qty: showQty, emoji: "🖤",
+        reason: showQty === 1
+          ? "One set — black shirt, black trousers, black shoes. Two wears across the trip. No one will know."
+          : "Two sets for the longer run. Still 2 wears from each.",
+        weight: (WEIGHTS["Black shirt"] + WEIGHTS["Black trousers"] + WEIGHTS["Black shoes"]) * showQty,
+        items: showQty === 1
+          ? ["Black shirt ×1", "Black trousers ×1", "Black shoes ×1"]
+          : ["Black shirt ×2", "Black trousers ×2", "Black shoes ×1"],
       });
     }
   }
 
-  if (mode === "corporate" && workDays > 0) {
-    const qty = workDays > 4 ? 2 : 1;
-    cards.push({
-      category: "Show blacks", qty, emoji: "🖤",
-      reason: qty === 1
-        ? "One set. Black shirt, black trousers, black shoes. Two wears across the trip — no one will know."
-        : "Two sets for a longer run. Still get 2 wears from each.",
-      weight: (WEIGHTS["Black shirt"] + WEIGHTS["Black trousers"] + WEIGHTS["Black shoes"]) * qty,
-      items: qty === 1
-        ? ["Black shirt ×1", "Black trousers ×1", "Black shoes ×1"]
-        : ["Black shirt ×2", "Black trousers ×2", "Black shoes ×1"],
-    });
-  }
+  // ── CASUAL / OFF-DUTY ────────────────────────────────────
+  // Shirt pool: ceil(totalDays ÷ 3) total shirts targeting 3 wears each.
+  // Travel tops (2) are already in that pool.
+  // Extra shirts to pack = pool − 2. No cap — 30 day tour needs what it needs.
+  const shirtPool    = Math.ceil(totalDays / 3);
+  const casualQty    = Math.max(0, shirtPool - 2);
+  const totalShirts  = casualQty + 2;
 
-  // ── OFF-DUTY / TRAVEL SHIRTS ─────────────────────────────
-  // Rule: target 3 wears per tee (can stretch to 2 if needed).
-  // Travel tops (2) are already in the bag and count as shirts.
-  // Total pool = ceil(totalDays ÷ 3). Extra shirts = pool − 2 travel tops.
-  // No hard cap — 30-day trip needs what it needs.
-
-  const shirtPool        = Math.ceil(totalDays / 3);
-  const travelTopCredit  = 2;
-  const casualQty        = Math.max(0, shirtPool - travelTopCredit);
-  const totalShirts      = casualQty + travelTopCredit;
-
-  const casualReason = casualQty === 0
-    ? `${totalDays} days — your 2 travel tops cover it at 3 wears each. No extra shirts needed.`
-    : `${totalDays} days needs ${totalShirts} shirts total at 3 wears each. Travel tops are 2 of those — pack ${casualQty} more.${isHot ? " Hot out, so aim for 2 wears max rather than 3." : ""}`;
+  const shirtNote = isHot
+    ? ` Hot weather — aim for 2 wears not 3 if you're sweating.`
+    : "";
 
   cards.push({
     category: "Casual shirts", qty: casualQty, emoji: "👔",
-    reason: casualReason,
+    reason: casualQty === 0
+      ? `${totalDays} days — your 2 travel tops cover the whole trip at 3 wears each. No extra shirts needed.${shirtNote}`
+      : `${totalDays} days ÷ 3 wears = ${shirtPool} shirts total. Travel tops are 2 of those — pack ${casualQty} more.${shirtNote}`,
     weight: WEIGHTS["Casual shirts"] * casualQty,
   });
 
   cards.push({
     category: "Travel tops", qty: 2, emoji: "✈️",
-    reason: `These count as ${travelTopCredit} of your ${totalShirts} total shirts. Outbound top reused on arrival, return top stays fresh.`,
+    reason: `These are ${travelDays === 1 ? "1" : "2"} of your ${totalShirts} total shirts. Outbound top reused once after arrival. Return top stays fresh for the journey home.`,
     weight: WEIGHTS["Casual shirts"] * 2,
   });
 
-  // ── CASUAL BOTTOMS — day/evening specific ─────────────────
-  const casualBottomDays = mode === "holiday" ? totalDays : casualDays + travelDays;
-  const casualBottomQty  = Math.max(1, Math.ceil(casualBottomDays / 3));
+  // CASUAL BOTTOMS — 3 wears per pair. Weather drives type.
+  const bottomQty = Math.max(1, Math.ceil(offDutyDays / 3));
 
-  // Shorts for hot/warm, chinos/smart trousers for mild, jeans/warmer for cool/cold
   if (isHot || isWarm) {
     cards.push({
-      category: "Casual shorts", qty: casualBottomQty, emoji: "🩳",
-      reason: `Shorts for off-hours and travel. 3 wears per pair, ${casualBottomQty} pair${casualBottomQty > 1 ? "s" : ""} covers ${casualBottomDays} casual days.`,
-      weight: WEIGHTS["Casual bottoms"] * casualBottomQty,
+      category: "Casual shorts", qty: bottomQty, emoji: "🩳",
+      reason: `${offDutyDays} off-duty days, 3 wears per pair = ${bottomQty} pair${bottomQty > 1 ? "s" : ""}.`,
+      weight: WEIGHTS["Rig shorts"] * bottomQty,
     });
-    // Suggest one pair of evening trousers for smarter dinners
     if (totalDays >= 4) {
       cards.push({
         category: "Evening chinos / smart trousers", qty: 1, emoji: "👖",
-        reason: "One pair of smarter trousers for a nicer dinner or a cooler evening. Shorts every night gets old fast.",
+        reason: "One smarter pair for nicer dinners or cooler evenings. Shorts every night gets old fast.",
         weight: 400,
       });
     }
   } else if (isMild) {
     cards.push({
-      category: "Chinos / smart casual trousers", qty: casualBottomQty, emoji: "👖",
-      reason: `Mild evenings — chinos or smart casual trousers. 3 wears per pair, ${casualBottomQty} pair${casualBottomQty > 1 ? "s" : ""}. Covers travel and days off smartly.`,
-      weight: 400 * casualBottomQty,
+      category: "Chinos / smart casual trousers", qty: bottomQty, emoji: "👖",
+      reason: `${offDutyDays} off-duty days, 3 wears per pair = ${bottomQty} pair${bottomQty > 1 ? "s" : ""}. Chinos are the move — casual enough for travel, smart enough for dinner.`,
+      weight: 400 * bottomQty,
     });
   } else if (isCool) {
     cards.push({
-      category: "Jeans / smart trousers", qty: casualBottomQty, emoji: "👖",
-      reason: `Cool evenings — jeans or smart trousers, ${casualBottomQty} pair${casualBottomQty > 1 ? "s" : ""}. Jeans go 3 wears without question. Warmer and smarter than chinos in the cold.`,
-      weight: 600 * casualBottomQty,
+      category: "Jeans / smart trousers", qty: bottomQty, emoji: "👖",
+      reason: `${offDutyDays} off-duty days, 3 wears per pair = ${bottomQty} pair${bottomQty > 1 ? "s" : ""}. Jeans go 3 wears without question. Warmer and smarter than chinos in the cool.`,
+      weight: 600 * bottomQty,
     });
   } else if (isCold) {
     cards.push({
-      category: "Jeans / insulated trousers", qty: casualBottomQty, emoji: "👖",
-      reason: `Cold — heavyweight jeans or lined trousers. ${casualBottomQty} pair${casualBottomQty > 1 ? "s" : ""}. Wear your warmest pair on the plane.`,
-      weight: 700 * casualBottomQty,
+      category: "Jeans / insulated trousers", qty: bottomQty, emoji: "👖",
+      reason: `${offDutyDays} off-duty days, 3 wears per pair = ${bottomQty} pair${bottomQty > 1 ? "s" : ""}. Heavyweight jeans or lined trousers. Wear your warmest pair on the plane.`,
+      weight: 700 * bottomQty,
+    });
+  } else {
+    // Unknown / mild default
+    cards.push({
+      category: "Casual bottoms", qty: bottomQty, emoji: "👖",
+      reason: `${offDutyDays} off-duty days, 3 wears per pair = ${bottomQty} pair${bottomQty > 1 ? "s" : ""}.`,
+      weight: WEIGHTS["Casual bottoms"] * bottomQty,
     });
   }
 
-  // ── JUMPERS — 4 wears per jumper off-duty ────────────────
-  // (handled per band in the outerwear section below, but quantity calculated here)
-
+  // TRAINERS — one pair, always
   cards.push({
     category: "Trainers", qty: 1, emoji: "👟",
-    reason: (isCold || isCool)
+    reason: isCold || isCool
       ? "One pair. Wear your heaviest on the plane — saves bag space."
-      : "One pair, full stop. Clean trainers carry evenings and travel.",
+      : "One pair. Clean trainers do evenings, travel, and casual days without a second pair.",
     weight: WEIGHTS["Trainers"],
   });
 
-  // ── WORK HOODIE / ZIP — site layer ────────
-  if (mode !== "holiday" && workDays > 0 && !isHot) {
-    cards.push({
-      category: "Work hoodie / zip", qty: 1, emoji: "🤐",
-      reason: isWarm
-        ? "A lightweight zip for site. Mornings and evenings on the rig can be cooler than you expect. One does the whole trip."
-        : isMild
-          ? "Site layer — zip or pull-over hoodie over the rig tee or polo. Keeps you warm without getting in the way."
-          : "Essential on site. Wear over the rig tee or polo all day if needed.",
-      weight: 520,
-    });
-  }
-
-  // ── WATERPROOF ────────────────────────────
+  // ── LAYERS & OUTERWEAR ────────────────────────────────────
+  // Waterproof — rain flag
   if (isRain) {
     cards.push({
       category: "Packable waterproof", qty: 1, emoji: "🌧️",
       reason: isHot
         ? "Rain in the heat — a packable shell folds to nothing and saves a soaking."
         : (isMild || isWarm)
-          ? "Rain expected — waterproof handles rain and wind. One layer, two jobs."
-          : "Wet and cold is the worst combination. Shell on top, everything warm underneath.",
-      weight: WEIGHTS["Waterproof jacket"],
+          ? "Rain expected — handles both rain and wind. One layer, two jobs."
+          : "Wet and cold is the worst combination. Shell on top, warm layers underneath.",
+      weight: WEIGHTS["Packable waterproof"],
     });
   }
 
-  // ── CASUAL EVENING LAYERS — jumpers at 4 wears each ──────
-  // Jumper occasions = same as casual shirt off-duty pool
-  const jumperOccasions  = mode === "holiday" ? totalDays : (workDays + casualDays + travelDays);
-  const jumperQty        = Math.max(1, Math.ceil(jumperOccasions / 4));
+  // JUMPERS — 4 wears each across the whole trip (work evenings + days off).
+  // You wear a jumper in the evenings regardless of whether it's a work day.
+  // So: totalDays ÷ 4, not just off-duty days.
+  const jumperQty = Math.max(1, Math.ceil(totalDays / 4));
 
   if (isHot) {
     cards.push({
       category: "Summer jumper / light knit", qty: 1, emoji: "🌙",
-      reason: "Even in the heat, evenings drop off. A thin cotton or linen knit — looks sharp, weighs nothing. One is all you need.",
+      reason: "Evenings drop off even in the heat. A thin cotton or linen knit over a shirt — looks sharp, weighs nothing.",
       weight: 280,
     });
-  }
-
-  if (isWarm) {
+  } else if (isWarm) {
     cards.push({
-      category: "Lightweight jumper", qty: jumperQty, emoji: "🧥",
-      reason: `Warm days, cooler evenings. A merino or fine-knit lightweight jumper. 4 wears each — ${jumperQty} cover${jumperQty === 1 ? "s" : ""} the trip.`,
+      category: `Lightweight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧥",
+      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Warm days, cooler evenings — a merino or fine-knit lightweight jumper. Smart enough for dinner, 4 wears without question.`,
       weight: 340 * jumperQty,
     });
-  }
-
-  if (isMild) {
+  } else if (isMild) {
     cards.push({
-      category: "Mid-weight jumper", qty: jumperQty, emoji: "🧶",
-      reason: `Mild — a proper mid-weight knit for evenings. 4 wears per jumper, ${jumperQty} for ${jumperOccasions} occasions. Merino if you have it.`,
+      category: `Mid-weight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Mild evenings need a proper mid-weight knit. Merino handles 4 wears without smelling.`,
       weight: 420 * jumperQty,
     });
-  }
-
-  if (isCool) {
+  } else if (isCool) {
     cards.push({
-      category: "Jumper / knitwear", qty: jumperQty, emoji: "🧶",
-      reason: `Cool evenings — a proper knit, ${jumperQty} at 4 wears each. Under a jacket, over a shirt, looks put together.`,
+      category: `Jumper / knitwear`, qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Under a jacket, over a shirt — looks put together. Merino is your friend here.`,
       weight: 480 * jumperQty,
     });
     cards.push({
@@ -363,12 +328,10 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
       reason: "Fleece, light down, or smart bomber over the jumper. Wear on the plane if it's bulky.",
       weight: 580,
     });
-  }
-
-  if (isCold) {
+  } else if (isCold) {
     cards.push({
-      category: "Heavy knit jumper", qty: jumperQty, emoji: "🧶",
-      reason: `A thick knit — wool or heavy merino. Under the coat, over a shirt. ${jumperQty} at 4 wears each covers ${jumperOccasions} off-duty occasions.`,
+      category: `Heavy knit jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Heavy merino or wool. Under the coat, over a shirt — works for an evening indoors without the coat on.`,
       weight: 600 * jumperQty,
     });
     cards.push({
@@ -378,55 +341,51 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
     cards.push({
       category: "Base layer top", qty: 1, emoji: "🧤",
-      reason: "Thin merino thermal under everything. One is enough — merino handles 3+ wears without issue.",
+      reason: "Thin merino thermal under everything. Merino handles 3+ wears without smelling.",
       weight: WEIGHTS["Base layer top"],
+    });
+  } else if (unknown) {
+    // No weather yet — suggest a mid-weight jumper as a sensible default
+    cards.push({
+      category: `Mid-weight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty}. Add a destination to get a weather-specific suggestion.`,
+      weight: 420 * jumperQty,
     });
   }
 
-  // ── THERMALS — avg temp at or below 0°C ──────────────────
+  // Thermals — when avg temp ≤ 0°C
   if (weather && weather.avgTemp <= 0) {
     cards.push({
       category: "Thermal set (top + bottoms)", qty: 1, emoji: "🌡️",
-      reason: `Average temperature is ${weather.avgTemp}°C — proper thermals under everything, not just a base layer top. A thermal top and long-john bottoms. Merino or synthetic, worn every day under your clothes.`,
+      reason: `Average temperature is ${weather.avgTemp}°C. Proper thermals — a top and long-john bottoms — worn every day under your clothes. Merino or synthetic, non-negotiable at these temperatures.`,
       weight: 380,
     });
   }
 
-  // ── SWIM / HOT WEATHER SECTION ────────────────────────────
+  // ── SUN & WATER ───────────────────────────────────────────
   if (isHot || isWarm) {
-    cards.push({
-      category: "__section_swim",
-      sectionLabel: "Sun & Water",
-      isSection: true,
-    });
+    cards.push({ category: "__section_swim", sectionLabel: "Sun & Water", isSection: true });
     cards.push({
       category: "Swimwear", qty: 1, emoji: "🩱",
-      reason: isHot
-        ? "It's hot. Pool, beach, rooftop — you'll want it. Weighs nothing."
-        : "Warm enough that a pool or beach is on the cards. One pair, takes up no space.",
+      reason: isHot ? "It's hot. Pool, beach, rooftop — you'll want it." : "Warm enough that a pool or beach is on the cards. Takes up no space.",
       weight: WEIGHTS["Swimwear"],
     });
     cards.push({
       category: "Flip flops", qty: 1, emoji: "🩴",
-      reason: "Pool, beach, hotel room, hosing down after a hot day. A pair of Havaianas weighs 200g and earns its place every time.",
+      reason: "Pool, beach, hotel room, hosing off after a hot rig day. A pair of Havaianas weighs 200g and earns its place every time.",
       weight: 200,
     });
   }
 
+  // ── TOILETRY BAG ──────────────────────────────────────────
   const TOILETRY_OPTIONS = {
     mini:    { label: "Mini bag",      desc: "Day bag / personal item. Basics only — deodorant, toothbrush, cleanser. No liquids over 30ml.", weight: 280, emoji: "🧴" },
     carryon: { label: "Carry-on bag",  desc: "100ml liquids rule. Pre-packed with refillable bottles, solid deodorant, mini toothpaste. Never repack from scratch — keep it ready to go.", weight: 650, emoji: "🪥" },
     full:    { label: "Full wash bag", desc: "Checked luggage — no restrictions. Full-size everything. Only worth it if you're checking in anyway.", weight: 1400, emoji: "🛁" },
   };
-
   cards.push({
-    category: "Toiletry bag",
-    isToletryCta: true,
-    emoji: "🪥",
-    options: TOILETRY_OPTIONS,
-    weight: 0,
-    qty: 1,
-    reason: "",
+    category: "Toiletry bag", isToletryCta: true, emoji: "🪥",
+    options: TOILETRY_OPTIONS, weight: 0, qty: 1, reason: "",
   });
 
   return { cards };
