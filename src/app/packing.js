@@ -294,9 +294,9 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   }
 
-  // JUMPERS — 4 wears each across the whole trip (work evenings + days off).
-  // You wear a jumper in the evenings regardless of whether it's a work day.
-  // So: totalDays ÷ 4, not just off-duty days.
+  // JUMPERS — always suggested, weather drives the weight/type.
+  // Rule: totalDays ÷ 4 wears per jumper. Merino handles 4 wears without issue.
+  // You wear a jumper in the evening on work days AND days off.
   const jumperQty = Math.max(1, Math.ceil(totalDays / 4));
 
   if (isHot) {
@@ -307,20 +307,20 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   } else if (isWarm) {
     cards.push({
-      category: `Lightweight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧥",
-      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Warm days, cooler evenings — a merino or fine-knit lightweight jumper. Smart enough for dinner, 4 wears without question.`,
+      category: "Lightweight jumper", qty: jumperQty, emoji: "🧥",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Warm days, cooler evenings — merino or fine-knit. Smart enough for dinner.`,
       weight: 340 * jumperQty,
     });
-  } else if (isMild) {
+  } else if (isMild || unknown) {
     cards.push({
-      category: `Mid-weight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Mild evenings need a proper mid-weight knit. Merino handles 4 wears without smelling.`,
+      category: "Mid-weight jumper", qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. ${isMild ? "Mild evenings need a proper mid-weight knit." : "Mid-weight is the safe bet — adjust once you've checked the forecast."} Merino handles 4 wears without smelling.`,
       weight: 420 * jumperQty,
     });
   } else if (isCool) {
     cards.push({
-      category: `Jumper / knitwear`, qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Under a jacket, over a shirt — looks put together. Merino is your friend here.`,
+      category: "Jumper / knitwear", qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Under a jacket, over a shirt — looks put together. Merino is your friend.`,
       weight: 480 * jumperQty,
     });
     cards.push({
@@ -330,8 +330,8 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   } else if (isCold) {
     cards.push({
-      category: `Heavy knit jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears per jumper = ${jumperQty}. Heavy merino or wool. Under the coat, over a shirt — works for an evening indoors without the coat on.`,
+      category: "Heavy knit jumper", qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Heavy merino or wool. Under the coat, over a shirt — good for an evening indoors without the coat on.`,
       weight: 600 * jumperQty,
     });
     cards.push({
@@ -343,13 +343,6 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
       category: "Base layer top", qty: 1, emoji: "🧤",
       reason: "Thin merino thermal under everything. Merino handles 3+ wears without smelling.",
       weight: WEIGHTS["Base layer top"],
-    });
-  } else if (unknown) {
-    // No weather yet — suggest a mid-weight jumper as a sensible default
-    cards.push({
-      category: `Mid-weight jumper${jumperQty > 1 ? "s" : ""}`, qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty}. Add a destination to get a weather-specific suggestion.`,
-      weight: 420 * jumperQty,
     });
   }
 
