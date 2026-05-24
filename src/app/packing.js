@@ -222,6 +222,9 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     ? `${totalDays - workDays} days off`
     : `${totalDays} days`;
 
+  // ── CASUAL WEAR SECTION ───────────────────────────────────
+  cards.push({ category: "__section_casual", sectionLabel: "Casual Wear", isSection: true });
+
   cards.push({
     category: "Casual shirts", qty: casualQty, emoji: "👔",
     reason: casualQty === 0
@@ -289,6 +292,8 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
   });
 
   // ── LAYERS & OUTERWEAR ────────────────────────────────────
+  cards.push({ category: "__section_layers", sectionLabel: "Layers & Outerwear", isSection: true });
+
   // Waterproof — rain flag
   if (isRain) {
     cards.push({
@@ -302,9 +307,11 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   }
 
-  // JUMPERS — always suggested, weather drives the weight/type.
-  // Rule: totalDays ÷ 4 wears per jumper. Merino handles 4 wears without issue.
-  const jumperQty = Math.max(1, Math.ceil(totalDays / 4));
+  // JUMPERS — same pool as casual shirts but ÷ 4 wears each.
+  // Corporate: totalDays (wear evenings on work days too)
+  // R&R: days off only (same as casualDaysPool)
+  // Holiday: totalDays
+  const jumperQty = Math.max(1, Math.ceil(casualDaysPool / 4));
 
   if (isHot) {
     cards.push({
