@@ -44,7 +44,7 @@ function wxEmoji({ maxTemp, rainChance }) {
 // ADVISORY ENGINE
 // ─────────────────────────────────────────────
 function getWeatherBand(weather) {
-  if (!weather) return "unknown";
+  if (!weather) return "mild"; // sensible default — adjusts once forecast loads
   const { maxTemp, rainChance } = weather;
   const rain = rainChance >= 40;
   if (maxTemp >= 25) return rain ? "hot_wet"  : "hot";
@@ -91,7 +91,6 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
   const isMild = band.startsWith("mild");
   const isCool = band.startsWith("cool");
   const isCold = band.startsWith("cold");
-  const unknown = band === "unknown";
 
   const cards = [];
 
@@ -165,7 +164,7 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
         weight: WEIGHTS["Rig shorts"],
       });
     } else {
-      // Cold or unknown: trousers only
+      // Cold: trousers only
       cards.push({
         category: "Work trousers / combats", qty: trousersDays, emoji: "👖",
         reason: `${workDays} work days, 2 wears per pair = ${trousersDays} pair${trousersDays > 1 ? "s" : ""}. ${isCold ? "Cold — shorts stay at home." : "Go with trousers as the safe bet."}`,
@@ -203,28 +202,36 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
   }
 
   // ── CASUAL / OFF-DUTY ────────────────────────────────────
-  // Shirt pool: ceil(totalDays ÷ 3) total shirts targeting 3 wears each.
-  // Travel tops (2) are already in that pool.
-  // Extra shirts to pack = pool − 2. No cap — 30 day tour needs what it needs.
-  const shirtPool    = Math.ceil(totalDays / 3);
+  // Corporate: evenings count as casual — pool = totalDays ÷ 3
+  // Rock & Roll: binary — work days = rig tees only, days off = casual shirts only
+  //   pool = (totalDays - workDays) ÷ 3
+  // Holiday: every day is casual — totalDays ÷ 3
+  // Travel tops (2) always count in the pool. No cap.
+
+  const casualDaysPool = mode === "rockroll"
+    ? Math.max(0, totalDays - workDays)
+    : totalDays;
+
+  const shirtPool    = Math.ceil(casualDaysPool / 3);
   const casualQty    = Math.max(0, shirtPool - 2);
   const totalShirts  = casualQty + 2;
 
-  const shirtNote = isHot
-    ? ` Hot weather — aim for 2 wears not 3 if you're sweating.`
-    : "";
+  const shirtNote = isHot ? ` Hot — aim for 2 wears not 3 if you're sweating.` : "";
+  const poolLabel = mode === "rockroll"
+    ? `${totalDays - workDays} days off`
+    : `${totalDays} days`;
 
   cards.push({
     category: "Casual shirts", qty: casualQty, emoji: "👔",
     reason: casualQty === 0
-      ? `${totalDays} days — your 2 travel tops cover the whole trip at 3 wears each. No extra shirts needed.${shirtNote}`
-      : `${totalDays} days ÷ 3 wears = ${shirtPool} shirts total. Travel tops are 2 of those — pack ${casualQty} more.${shirtNote}`,
+      ? `${poolLabel} — your 2 travel tops cover it at 3 wears each. No extra shirts needed.${shirtNote}`
+      : `${poolLabel} ÷ 3 wears = ${shirtPool} shirts total. Travel tops are 2 of those — pack ${casualQty} more.${shirtNote}`,
     weight: WEIGHTS["Casual shirts"] * casualQty,
   });
 
   cards.push({
     category: "Travel tops", qty: 2, emoji: "✈️",
-    reason: `These are ${travelDays === 1 ? "1" : "2"} of your ${totalShirts} total shirts. Outbound top reused once after arrival. Return top stays fresh for the journey home.`,
+    reason: `These are 2 of your ${totalShirts} total casual shirts. Outbound top reused once after arrival. Return top stays fresh for the journey home.`,
     weight: WEIGHTS["Casual shirts"] * 2,
   });
 
@@ -311,10 +318,10 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
       reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Warm days, cooler evenings — merino or fine-knit. Smart enough for dinner.`,
       weight: 340 * jumperQty,
     });
-  } else if (isMild || unknown) {
+  } else if (isMild) {
     cards.push({
       category: "Mid-weight jumper", qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. ${isMild ? "Mild evenings need a proper mid-weight knit." : "Mid-weight is the safe bet — adjust once you've checked the forecast."} Merino handles 4 wears without smelling.`,
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Mild evenings need a proper mid-weight knit. Merino handles 4 wears without smelling.`,
       weight: 420 * jumperQty,
     });
   } else if (isCool) {
@@ -432,8 +439,8 @@ export default function PackingApp() {
     const timer = setTimeout(async () => {
       if (!destination.trim()) return;
       setWxStatus("Looking up weather…");
-      setWeather(null);
-      setCityRows([]);
+      // Don't reset weather/cityRows here — keep showing previous data while refetching
+      // so the packing list doesn't flicker or collapse
       try {
         const cities = destination.split(",").map(s => s.trim()).filter(Boolean);
         const rows = [];
