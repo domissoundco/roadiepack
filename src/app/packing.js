@@ -64,8 +64,9 @@ const WEIGHTS = {
   "Black shirt": 260, "Black trousers": 480, "Black shoes": 880,
   "Trainers": 750, "Waterproof jacket": 420, "Packable waterproof": 420,
   "Summer jumper / light knit": 280,
+  "Light knit / summer jumper": 280,
   "Lightweight jumper": 340, "Mid-weight jumper": 420,
-  "Jumper / knitwear": 480, "Heavy knit jumper": 600,
+  "Thick knit / chunky jumper": 480, "Jumper / knitwear": 480, "Heavy knit jumper": 600,
   "Casual jacket / mid-layer": 580,
   "Warm mid-layer": 580, "Heavy coat": 1200, "Base layer top": 180,
   "Casual shorts": 300,
@@ -303,42 +304,41 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 
   // JUMPERS — always suggested, weather drives the weight/type.
   // Rule: totalDays ÷ 4 wears per jumper. Merino handles 4 wears without issue.
-  // You wear a jumper in the evening on work days AND days off.
   const jumperQty = Math.max(1, Math.ceil(totalDays / 4));
 
   if (isHot) {
     cards.push({
-      category: "Summer jumper / light knit", qty: 1, emoji: "🌙",
-      reason: "Evenings drop off even in the heat. A thin cotton or linen knit over a shirt — looks sharp, weighs nothing.",
+      category: "Light knit / summer jumper", qty: 1, emoji: "🌙",
+      reason: "Thin cotton or linen knit — 200–300g. Evenings drop off even in the heat. Looks sharp over a shirt, weighs nothing in the bag.",
       weight: 280,
     });
   } else if (isWarm) {
     cards.push({
-      category: "Lightweight jumper", qty: jumperQty, emoji: "🧥",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Warm days, cooler evenings — merino or fine-knit. Smart enough for dinner.`,
+      category: "Lightweight jumper", qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Fine-knit merino or cotton, ~300–400g. Warm days but evenings cool off — this handles it without bulk.`,
       weight: 340 * jumperQty,
     });
   } else if (isMild) {
     cards.push({
       category: "Mid-weight jumper", qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Mild evenings need a proper mid-weight knit. Merino handles 4 wears without smelling.`,
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Mid-weight merino or wool blend, ~400–500g. Proper warmth for mild evenings, smart enough for dinner.`,
       weight: 420 * jumperQty,
     });
   } else if (isCool) {
     cards.push({
-      category: "Jumper / knitwear", qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Under a jacket, over a shirt — looks put together. Merino is your friend.`,
+      category: "Thick knit / chunky jumper", qty: jumperQty, emoji: "🧶",
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Chunky wool or heavy merino, ~500–600g. Goes under a jacket on the coldest evenings, stands alone on milder ones.`,
       weight: 480 * jumperQty,
     });
     cards.push({
       category: "Casual jacket / mid-layer", qty: 1, emoji: "🫙",
-      reason: "Fleece, light down, or smart bomber over the jumper. Wear on the plane if it's bulky.",
+      reason: "Fleece, light down, or smart bomber over the jumper. Wear on the plane — costs nothing in bag space.",
       weight: 580,
     });
   } else if (isCold) {
     cards.push({
       category: "Heavy knit jumper", qty: jumperQty, emoji: "🧶",
-      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Heavy merino or wool. Under the coat, over a shirt — good for an evening indoors without the coat on.`,
+      reason: `${totalDays} days ÷ 4 wears = ${jumperQty} jumper${jumperQty > 1 ? "s" : ""}. Heavy wool or thick merino, 600g+. Under the coat, over a shirt — good for an evening indoors without needing the coat on.`,
       weight: 600 * jumperQty,
     });
     cards.push({
@@ -485,11 +485,11 @@ export default function PackingApp() {
 
   const displayCards = cards.map(c => {
     if (c.isToletryCta) return { ...c, weight: TOILETRY_WEIGHTS[toiletryBag] };
-    return {
-      ...c,
-      qty:    c.isSection ? 0 : (overrides[c.category] ?? c.qty),
-      weight: c.isSection ? 0 : ((WEIGHTS[c.category] || 200) * (overrides[c.category] ?? c.qty)),
-    };
+    if (c.isSection) return { ...c, qty: 0, weight: 0 };
+    const qty = overrides[c.category] ?? c.qty;
+    // Use per-unit weight from WEIGHTS table if available, otherwise derive from card
+    const unitWeight = WEIGHTS[c.category] || Math.round(c.weight / (c.qty || 1));
+    return { ...c, qty, weight: unitWeight * qty };
   });
 
   const packableCards = displayCards.filter(c => !c.isSection);
@@ -577,7 +577,7 @@ export default function PackingApp() {
             <div>
               <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Destinations</label>
               <input type="text" value={destination} placeholder="London, Barcelona, Paris" style={inp}
-                onChange={e => setDest(e.target.value)} />
+                onChange={e => { setDest(e.target.value); setOverrides({}); }} />
             </div>
           </div>
         )}
