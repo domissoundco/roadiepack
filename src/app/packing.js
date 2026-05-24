@@ -547,8 +547,9 @@ export default function PackingApp() {
   const [checked, setChecked]       = useState({});
   const [overrides, setOverrides]   = useState({});
   const [toiletryBag, setToiletryBag] = useState("carryon");
-  const [view, setView]             = useState("list"); // "list" | "cubes"
+  const [view, setView]             = useState("list");
   const [cubeChecked, setCubeChecked] = useState({});
+  const [kitWeight, setKitWeight]   = useState(0); // extra kit in kg (interface, cables, plugs etc)
 
   useEffect(() => {
     let cancelled = false;
@@ -609,7 +610,8 @@ export default function PackingApp() {
   });
 
   const packableCards = displayCards.filter(c => !c.isSection);
-  const totalKg       = (packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1);
+  const clothingKg    = parseFloat((packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1));
+  const totalKg       = parseFloat((clothingKg + kitWeight).toFixed(1));
   const checkedCount  = packableCards.filter(c => checked[c.category]).length;
   const t = THEMES[mode];
 
@@ -625,10 +627,18 @@ export default function PackingApp() {
     boxSizing: "border-box", outline: "none", letterSpacing: "0.1px",
   };
 
-  const bagNote = parseFloat(totalKg) < 6   ? "Backpack — travelling light"
-    : parseFloat(totalKg) < 10  ? "Tumi carry-on — no problem"
-    : parseFloat(totalKg) < 14  ? "Carry-on at the limit"
-    : "This wants a checked bag";
+  // Bag recommendation — real empty bag weights baked in:
+  // Backpack ~1.5kg empty · Tumi 19" carry-on 5kg empty · Checked case 4kg empty
+  // Thresholds on CLOTHING weight only — bag weight added for display
+  const bagData = clothingKg <= 8.5
+    ? { label: "Backpack",         total: (clothingKg + 1.5 + kitWeight).toFixed(1), note: "1.5kg bag" }
+    : clothingKg <= 10.0
+      ? { label: "Tumi 19\" carry-on", total: (clothingKg + 5 + kitWeight).toFixed(1), note: "5kg bag · carry-on limit ~15kg" }
+      : clothingKg <= 19.0
+        ? { label: "Checked case",    total: (clothingKg + 4 + kitWeight).toFixed(1), note: "4kg case · checked limit ~23kg" }
+        : { label: "Over limit",       total: "—", note: "Cut something — you're over checked bag weight" };
+
+  const bagNote = `${bagData.label} — ${bagData.total}kg total · ${bagData.note}`;
 
   return (
     <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif" }}>
@@ -694,6 +704,12 @@ export default function PackingApp() {
               <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Destinations</label>
               <input type="text" value={destination} placeholder="London, Barcelona, Paris" style={inp}
                 onChange={e => { setDest(e.target.value); setOverrides({}); }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Extra kit weight (kg)</label>
+              <input type="number" value={kitWeight || ""} min={0} max={30} step={0.1} style={inp}
+                onChange={e => setKitWeight(parseFloat(e.target.value) || 0)}
+                placeholder="e.g. 2.5 for interface + cables + plugs" />
             </div>
           </div>
         )}
@@ -1029,10 +1045,15 @@ export default function PackingApp() {
         {/* Weight + bag note — always visible */}
         <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
-            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>Estimated weight</p>
+            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>Clothing weight</p>
             <span style={{ fontSize: 48, fontWeight: 300, color: t.text, lineHeight: 1, letterSpacing: "-1px" }}>
-              {totalKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
+              {clothingKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
             </span>
+            {kitWeight > 0 && (
+              <p style={{ margin: "4px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 13, color: t.muted }}>
+                + {kitWeight}kg kit = <strong style={{ color: t.text }}>{totalKg}kg</strong> total before bag
+              </p>
+            )}
             <p style={{ margin: "6px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: t.accent, letterSpacing: "0.3px" }}>
               {bagNote}
             </p>
