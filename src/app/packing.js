@@ -404,6 +404,78 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 // ─────────────────────────────────────────────
 // THEMES — elevated, editorial
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// PACKING CUBES
+// ─────────────────────────────────────────────
+const CUBE_ASSIGNMENTS = {
+  // Cube 1 — Workwear (grab the whole cube for site days)
+  "Rig t-shirts":              { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+  "Polo shirts":               { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+  "Work shorts":               { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+  "Work shorts (optional)":    { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+  "Work trousers / combats":   { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+  "Work hoodie / zip":         { cube: 1, label: "Workwear", emoji: "🧱", note: "Site days" },
+
+  // Cube 2 — Casual / Off-duty
+  "Casual shirts":             { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Travel tops":               { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Casual shorts":             { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Casual bottoms":            { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Chinos / smart casual trousers": { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Evening chinos / smart trousers": { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Jeans / smart trousers":    { cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+  "Jeans / insulated trousers":{ cube: 2, label: "Casual", emoji: "👜", note: "Evenings & days off" },
+
+  // Cube 3 — Underwear & Socks (one-use items, easy to track)
+  "Underwear & socks":         { cube: 3, label: "Underwear & Socks", emoji: "🩲", note: "One use — repack dirty separately" },
+
+  // Cube 4 — Layers (compressible cube, squash when not needed)
+  "Light knit / summer jumper":{ cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Lightweight jumper":        { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Mid-weight jumper":         { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Thick knit / chunky jumper":{ cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Heavy knit jumper":         { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Casual jacket / mid-layer": { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Packable waterproof":       { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Base layer top":            { cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+  "Thermal set (top + bottoms)":{ cube: 4, label: "Layers", emoji: "🗜️", note: "Compressible cube" },
+
+  // Outside cubes — specific handling
+  "Show blacks":               { cube: 0, label: "Hang or fold flat", emoji: "🖤", note: "Outside cubes — avoid creasing" },
+  "Heavy coat":                { cube: 0, label: "Wear on plane", emoji: "🧥", note: "On your back — free bag weight" },
+  "Trainers":                  { cube: 0, label: "Shoe bag — base of bag", emoji: "👟", note: "Sole to sole in a shoe bag" },
+  "Flip flops":                { cube: 0, label: "Shoe bag — base of bag", emoji: "🩴", note: "With trainers at the bottom" },
+  "Swimwear":                  { cube: 0, label: "Top pocket / outer zip", emoji: "🩱", note: "Quick access" },
+  "Toiletry bag":              { cube: 0, label: "Top pocket / outer zip", emoji: "🪥", note: "Quick access at security" },
+};
+
+function buildCubes(packableCards) {
+  const cubes = { 1: [], 2: [], 3: [], 4: [], 0: [] };
+  packableCards.forEach(card => {
+    if (card.qty === 0 || card.isToletryCta) return;
+    const assignment = CUBE_ASSIGNMENTS[card.category];
+    const cubeId = assignment ? assignment.cube : 2; // default to casual cube
+    const label = assignment ? assignment.label : "Casual";
+    const emoji = assignment ? assignment.emoji : "👜";
+    const note  = assignment ? assignment.note : "";
+    cubes[cubeId].push({ ...card, cubeLabel: label, cubeEmoji: emoji, cubeNote: note });
+  });
+  // Add toiletry bag manually to outside section
+  cubes[0].push({
+    category: "Toiletry bag", qty: 1, emoji: "🪥",
+    cubeLabel: "Top pocket / outer zip", cubeNote: "Quick access at security",
+  });
+  return cubes;
+}
+
+const CUBE_META = {
+  1: { label: "Cube 1 — Workwear",         colour: "#1A3A1A", desc: "Grab the whole cube on site days. Leave it in the bag on days off." },
+  2: { label: "Cube 2 — Casual",           colour: "#2C3E6B", desc: "Evenings and days off. Swap with the workwear cube when the rig's done." },
+  3: { label: "Cube 3 — Underwear & Socks",colour: "#5C3A1A", desc: "One use each. When empty you're nearly home. Repack dirty in a separate bag." },
+  4: { label: "Cube 4 — Layers",           colour: "#3A1A5C", desc: "Use a compressible cube. Squash it flat in warm weather, expand when it gets cold." },
+  0: { label: "Outside the cubes",          colour: "#4A4A4A", desc: "Specific placement — read the notes." },
+};
+
 const THEMES = {
   corporate: {
     bg: "#F5F3EF", text: "#18181B", muted: "#71717A", accent: "#1A3A1A",
@@ -443,6 +515,7 @@ export default function PackingApp() {
   const [checked, setChecked]       = useState({});
   const [overrides, setOverrides]   = useState({});
   const [toiletryBag, setToiletryBag] = useState("carryon");
+  const [view, setView]             = useState("list"); // "list" | "cubes"
 
   useEffect(() => {
     let cancelled = false;
@@ -637,33 +710,101 @@ export default function PackingApp() {
           </div>
         )}
 
-        {/* Section header + pack toggle */}
+        {/* View tabs + pack toggle */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>
-            {packMode ? `Packing — ${checkedCount} of ${packableCards.length}` : "What I'd pack"}
-          </span>
-          <button
-            onClick={() => { setPackMode(!packMode); setChecked({}); }}
-            style={{
-              padding: "8px 22px", borderRadius: 6, cursor: "pointer",
-              fontFamily: "system-ui, sans-serif", fontSize: 11, letterSpacing: "1px", textTransform: "uppercase",
-              border: `1px solid ${t.accent}`,
-              background: packMode ? t.accent : "transparent",
-              color: packMode ? "#fff" : t.accent,
-              transition: "all 0.15s",
-            }}
-          >{packMode ? "Done" : "Pack mode"}</button>
+          <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${t.border}` }}>
+            {[{ id: "list", label: "List" }, { id: "cubes", label: "Cubes" }].map(v => (
+              <button key={v.id} onClick={() => { setView(v.id); setPackMode(false); }}
+                style={{
+                  padding: "8px 16px 7px", background: "none", border: "none", cursor: "pointer",
+                  fontFamily: "system-ui, sans-serif", fontSize: 11, letterSpacing: "1px", textTransform: "uppercase",
+                  color: view === v.id ? t.text : t.muted,
+                  borderBottom: view === v.id ? `2px solid ${t.accent}` : "2px solid transparent",
+                  marginBottom: -1, transition: "all 0.15s",
+                }}>{v.label}</button>
+            ))}
+          </div>
+          {view === "list" && (
+            <button
+              onClick={() => { setPackMode(!packMode); setChecked({}); }}
+              style={{
+                padding: "8px 22px", borderRadius: 6, cursor: "pointer",
+                fontFamily: "system-ui, sans-serif", fontSize: 11, letterSpacing: "1px", textTransform: "uppercase",
+                border: `1px solid ${t.accent}`,
+                background: packMode ? t.accent : "transparent",
+                color: packMode ? "#fff" : t.accent,
+                transition: "all 0.15s",
+              }}
+            >{packMode ? "Done" : "Pack mode"}</button>
+          )}
         </div>
 
         {/* Progress bar */}
-        {packMode && (
+        {packMode && view === "list" && (
           <div style={{ height: 1, background: t.border, marginBottom: 24, overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${(checkedCount / packableCards.length) * 100}%`, background: t.accent, transition: "width 0.3s" }} />
           </div>
         )}
 
-        {/* Cards */}
-        <div style={{ display: "grid", gap: 1, borderTop: `1px solid ${t.border}` }}>
+        {/* Cubes view */}
+        {view === "cubes" && (() => {
+          const cubes = buildCubes(packableCards);
+          return (
+            <div style={{ display: "grid", gap: 20 }}>
+              {[1, 2, 3, 4, 0].map(cubeId => {
+                const items = cubes[cubeId];
+                if (!items || items.length === 0) return null;
+                const meta = CUBE_META[cubeId];
+                return (
+                  <div key={cubeId} style={{ border: `1px solid ${t.border}`, borderRadius: 12, overflow: "hidden" }}>
+                    {/* Cube header */}
+                    <div style={{ padding: "12px 18px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.colour }}>
+                          {meta.label}
+                        </span>
+                        <p style={{ margin: "3px 0 0", fontSize: 12, color: t.muted, fontStyle: "italic", fontFamily: "inherit" }}>
+                          {meta.desc}
+                        </p>
+                      </div>
+                      <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted }}>
+                        {items.length} item{items.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    {/* Items */}
+                    {items.map((item, i) => (
+                      <div key={item.category} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 18px",
+                        borderBottom: i < items.length - 1 ? `1px solid ${t.border}` : "none",
+                        gap: 12,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 16 }}>{item.emoji}</span>
+                          <div>
+                            <span style={{ fontSize: 15, color: t.text }}>{item.category}</span>
+                            {item.cubeNote && (
+                              <p style={{ margin: "1px 0 0", fontSize: 11, color: t.muted, fontFamily: "system-ui, sans-serif" }}>
+                                {item.cubeNote}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span style={{ fontFamily: "system-ui, sans-serif", fontWeight: 700, fontSize: 15, color: meta.colour, flexShrink: 0 }}>
+                          ×{item.qty}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* List view */}
+        {view === "list" && (
+        <div style={{ borderTop: `1px solid ${t.border}` }}>
           {displayCards.map((card) => {
             // Section divider
             if (card.isSection) {
@@ -819,8 +960,9 @@ export default function PackingApp() {
             );
           })}
         </div>
+        )} {/* end list view */}
 
-        {/* Weight + bag note */}
+        {/* Weight + bag note — always visible */}
         <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
             <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>Estimated weight</p>
