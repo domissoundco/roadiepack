@@ -57,28 +57,60 @@ function getWeatherBand(weather) {
 }
 
 const WEIGHTS = {
-  "Casual shirts": 220, "Casual bottoms": 360,
-  "Polo shirts": 240,
-  "Work t-shirts (rig)": 220, "Rig shorts": 300, "Rig trousers": 440,
-  "Work shorts": 300, "Work shorts (optional)": 300,
-  "Work trousers / combats": 440, "Work trousers / combats (1 pair)": 440,
-  "Work hoodie / zip": 520,
-  "Black shirt": 260, "Black trousers": 480, "Black shoes": 880,
-  "Trainers": 750, "Waterproof jacket": 420, "Packable waterproof": 420,
-  "Summer jumper / light knit": 280,
-  "Light knit / summer jumper": 280,
-  "Lightweight jumper": 340, "Mid-weight jumper": 420,
-  "Thick knit / chunky jumper": 480, "Jumper / knitwear": 480, "Heavy knit jumper": 600,
-  "Casual jacket / mid-layer": 580,
-  "Warm mid-layer": 580, "Heavy coat": 1200, "Base layer top": 180,
-  "Casual shorts": 300,
-  "Evening chinos / smart trousers": 400,
+  // Calibrated from real packs (XL sizing):
+  // Workwear: 5 rig tees+3 shorts+cargo+hoodie+padded jacket+10 socks = 4700g
+  // Casual: 2 tees+2 polos+2 shorts+windbreaker+merino = 2900g
+  // UW: 20 boxers+swim shorts = 1750g. Shoes: sambas+flip flops = 1000g
+  "Underwear & socks":              135,  // 75g boxer + 60g socks per day
+  "Underwear":                       75,
+  "Socks":                           60,
+
+  "Rig t-shirts":                   260,
+  "Work t-shirts (rig)":            260,
+  "Polo shirts":                    280,
+  "Work shorts":                    320,
+  "Work shorts (optional)":         320,
+  "Rig shorts":                     320,
+  "Work trousers / combats":        500,
+  "Work trousers / combats (1 pair)": 500,
+  "Rig trousers":                   500,
+  "Work hoodie / zip":              580,
+
+  "Black shirt":                    260,
+  "Black trousers":                 480,
+  "Black shoes":                    880,
+
+  "Casual shirts":                  240,
+  "Travel tops":                    240,
+  "Casual bottoms":                 300,
+  "Casual shorts":                  300,
   "Chinos / smart casual trousers": 400,
-  "Jeans / smart trousers": 600,
-  "Jeans / insulated trousers": 700,
-  "Thermal set (top + bottoms)": 380,
-  "Swimwear": 160, "Flip flops": 200,
-  "Underwear": 40, "Socks": 55, "Toiletries": 750,
+  "Evening chinos / smart trousers": 400,
+  "Jeans / smart trousers":         620,
+  "Jeans / insulated trousers":     700,
+
+  "Trainers":                       800,
+  "Flip flops":                     200,
+
+  "Packable waterproof":            380,
+  "Waterproof jacket":              380,
+  "Casual jacket / mid-layer":      480,
+  "Warm mid-layer":                 480,
+  "Heavy coat":                     1200,
+
+  "Light knit / summer jumper":     240,
+  "Summer jumper / light knit":     240,
+  "Lightweight jumper":             320,
+  "Mid-weight jumper":              420,
+  "Thick knit / chunky jumper":     480,
+  "Jumper / knitwear":              480,
+  "Heavy knit jumper":              580,
+
+  "Base layer top":                 160,
+  "Thermal set (top + bottoms)":    360,
+
+  "Swimwear":                       250,
+  "Toiletries":                     750,
 };
 
 const wFmt = (g) => g >= 1000 ? `${(g/1000).toFixed(1)}kg` : `${g}g`;
@@ -237,8 +269,8 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 
   cards.push({
     category: "Travel tops", qty: 2, emoji: "✈️",
-    reason: `These are 2 of your ${totalShirts} total casual shirts. Outbound top reused once after arrival. Return top stays fresh for the journey home.`,
-    weight: WEIGHTS["Casual shirts"] * 2,
+    reason: `These are 2 of your ${totalShirts} total casual tops — pick whatever works: t-shirt, polo, or smart top. Outbound reused once after arrival. Return stays fresh for the journey home.`,
+    weight: WEIGHTS["Travel tops"] * 2,
   });
 
   // CASUAL BOTTOMS — 3 wears per pair. Weather drives type.
@@ -516,6 +548,7 @@ export default function PackingApp() {
   const [overrides, setOverrides]   = useState({});
   const [toiletryBag, setToiletryBag] = useState("carryon");
   const [view, setView]             = useState("list"); // "list" | "cubes"
+  const [cubeChecked, setCubeChecked] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -758,31 +791,62 @@ export default function PackingApp() {
                 return (
                   <div key={cubeId} style={{ border: `1px solid ${t.border}`, borderRadius: 12, overflow: "hidden" }}>
                     {/* Cube header */}
-                    <div style={{ padding: "12px 18px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div>
-                        <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.colour }}>
-                          {meta.label}
-                        </span>
-                        <p style={{ margin: "3px 0 0", fontSize: 12, color: t.muted, fontStyle: "italic", fontFamily: "inherit" }}>
-                          {meta.desc}
-                        </p>
+                    {(() => {
+                      const cubeItems = items;
+                      const cubeDone = cubeItems.filter(item => cubeChecked[`${cubeId}-${item.category}`]).length;
+                      const allDone = cubeDone === cubeItems.length;
+                      return (
+                      <div style={{ padding: "12px 18px", borderBottom: `1px solid ${t.border}`, background: allDone ? meta.colour + "10" : "transparent" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div>
+                            <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.colour }}>
+                              {meta.label} {allDone ? "✓" : ""}
+                            </span>
+                            <p style={{ margin: "3px 0 0", fontSize: 12, color: t.muted, fontStyle: "italic", fontFamily: "inherit" }}>
+                              {meta.desc}
+                            </p>
+                          </div>
+                          <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: cubeDone > 0 ? meta.colour : t.muted, fontWeight: cubeDone > 0 ? 600 : 400 }}>
+                            {cubeDone}/{cubeItems.length}
+                          </span>
+                        </div>
+                        {/* Mini progress bar */}
+                        {cubeDone > 0 && (
+                          <div style={{ height: 2, background: t.border, borderRadius: 1, marginTop: 8, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${(cubeDone/cubeItems.length)*100}%`, background: meta.colour, transition: "width 0.3s" }} />
+                          </div>
+                        )}
                       </div>
-                      <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted }}>
-                        {items.length} item{items.length > 1 ? "s" : ""}
-                      </span>
-                    </div>
+                      );
+                    })()}
                     {/* Items */}
-                    {items.map((item, i) => (
+                    {items.map((item, i) => {
+                      const key = `${cubeId}-${item.category}`;
+                      const done = !!cubeChecked[key];
+                      return (
                       <div key={item.category} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: "12px 18px",
                         borderBottom: i < items.length - 1 ? `1px solid ${t.border}` : "none",
-                        gap: 12,
-                      }}>
+                        gap: 12, opacity: done ? 0.3 : 1, transition: "opacity 0.2s",
+                        cursor: "pointer",
+                      }}
+                        onClick={() => setCubeChecked(p => ({ ...p, [key]: !p[key] }))}
+                      >
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {/* Check circle */}
+                          <div style={{
+                            width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                            border: `1.5px solid ${done ? meta.colour : t.border}`,
+                            background: done ? meta.colour : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            transition: "all 0.15s",
+                          }}>
+                            {done && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                          </div>
                           <span style={{ fontSize: 16 }}>{item.emoji}</span>
                           <div>
-                            <span style={{ fontSize: 15, color: t.text }}>{item.category}</span>
+                            <span style={{ fontSize: 15, color: t.text, textDecoration: done ? "line-through" : "none" }}>{item.category}</span>
                             {item.cubeNote && (
                               <p style={{ margin: "1px 0 0", fontSize: 11, color: t.muted, fontFamily: "system-ui, sans-serif" }}>
                                 {item.cubeNote}
@@ -794,7 +858,7 @@ export default function PackingApp() {
                           ×{item.qty}
                         </span>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 );
               })}
