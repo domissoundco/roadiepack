@@ -44,13 +44,15 @@ function wxEmoji({ maxTemp, rainChance }) {
 // ADVISORY ENGINE
 // ─────────────────────────────────────────────
 function getWeatherBand(weather) {
-  if (!weather) return "mild"; // sensible default — adjusts once forecast loads
-  const { maxTemp, rainChance } = weather;
+  if (!weather) return "mild"; // sensible default
+  const { avgTemp, maxTemp, rainChance } = weather;
   const rain = rainChance >= 40;
-  if (maxTemp >= 25) return rain ? "hot_wet"  : "hot";
-  if (maxTemp >= 18) return rain ? "warm_wet" : "warm";
-  if (maxTemp >= 12) return rain ? "mild_wet" : "mild";
-  if (maxTemp >= 7)  return rain ? "cool_wet" : "cool";
+  // Band driven by avgTemp — pack for what you'll actually feel, not just the peak.
+  // maxTemp is used separately to trigger hot-weather extras (swimwear etc).
+  if (avgTemp >= 22) return rain ? "hot_wet"  : "hot";
+  if (avgTemp >= 15) return rain ? "warm_wet" : "warm";
+  if (avgTemp >= 10) return rain ? "mild_wet" : "mild";
+  if (avgTemp >= 4)  return rain ? "cool_wet" : "cool";
   return rain ? "cold_wet" : "cold";
 }
 
@@ -369,17 +371,18 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
     });
   }
 
-  // ── SUN & WATER ───────────────────────────────────────────
-  if (isHot || isWarm) {
+  // ── SUN & WATER ── triggered by maxTemp not band ──────────
+  const hotDays = weather && weather.maxTemp >= 24;
+  if (hotDays) {
     cards.push({ category: "__section_swim", sectionLabel: "Sun & Water", isSection: true });
     cards.push({
       category: "Swimwear", qty: 1, emoji: "🩱",
-      reason: isHot ? "It's hot. Pool, beach, rooftop — you'll want it." : "Warm enough that a pool or beach is on the cards. Takes up no space.",
+      reason: `Max ${weather.maxTemp}°C — pool, beach, or rooftop is on the cards. Takes up no space.`,
       weight: WEIGHTS["Swimwear"],
     });
     cards.push({
       category: "Flip flops", qty: 1, emoji: "🩴",
-      reason: "Pool, beach, hotel room, hosing off after a hot rig day. A pair of Havaianas weighs 200g and earns its place every time.",
+      reason: "Pool, beach, hotel room. A pair of Havaianas weighs 200g and earns its place every time.",
       weight: 200,
     });
   }
