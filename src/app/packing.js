@@ -421,8 +421,7 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 
   // ── TOILETRY BAG ──────────────────────────────────────────
   const TOILETRY_OPTIONS = {
-    mini:    { label: "Mini bag",      desc: "Day bag / personal item. Basics only — deodorant, toothbrush, cleanser. No liquids over 30ml.", weight: 280, emoji: "🧴" },
-    carryon: { label: "Carry-on bag",  desc: "100ml liquids rule. Pre-packed with refillable bottles, solid deodorant, mini toothpaste. Never repack from scratch — keep it ready to go.", weight: 650, emoji: "🪥" },
+    carryon: { label: "Carry-on wash bag",  desc: "100ml liquids rule. Pre-packed refillable bottles, solid deodorant, mini toothpaste. Keep it ready to go — never repack from scratch.", weight: 650, emoji: "🪥" },
     full:    { label: "Full wash bag", desc: "Checked luggage — no restrictions. Full-size everything. Only worth it if you're checking in anyway.", weight: 1400, emoji: "🛁" },
   };
   cards.push({
@@ -436,6 +435,82 @@ function buildAdvisory({ totalDays, workDays, mode, band, weather }) {
 // ─────────────────────────────────────────────
 // THEMES — elevated, editorial
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// TRAVEL DAY OUTFIT ADVISORY
+// What to wear to the airport — counts toward
+// the packing list but doesn't go in the bag.
+// ─────────────────────────────────────────────
+function getTravelDayOutfit({ band, mode, weather }) {
+  const isHot  = band.startsWith("hot");
+  const isWarm = band.startsWith("warm");
+  const isMild = band.startsWith("mild");
+  const isCool = band.startsWith("cool");
+  const isCold = band.startsWith("cold");
+  const isRain = band.includes("wet");
+  const maxTemp = weather?.maxTemp;
+  const minTemp = weather?.minTemp;
+
+  const outfit = [];
+  const notes  = [];
+
+  // TOP
+  if (isHot || isWarm) {
+    outfit.push({ item: "Travel top (t-shirt or polo)", emoji: "👕" });
+    notes.push("Light, breathable — airports are warm and you'll be moving.");
+  } else if (isMild) {
+    outfit.push({ item: "Travel top (t-shirt or smart top)", emoji: "👕" });
+    outfit.push({ item: "Mid-weight jumper over the top", emoji: "🧶" });
+    notes.push("Jumper on for the journey, easy to ditch if the airport is hot.");
+  } else if (isCool) {
+    outfit.push({ item: "Travel top", emoji: "👕" });
+    outfit.push({ item: "Thick knit jumper", emoji: "🧶" });
+    notes.push("Layer up — you can always remove it through security.");
+  } else if (isCold) {
+    outfit.push({ item: "Base layer top", emoji: "🧤" });
+    outfit.push({ item: "Heavy knit jumper", emoji: "🧶" });
+    outfit.push({ item: "Heavy coat", emoji: "🧥" });
+    notes.push("Wear the coat — it's your heaviest item and costs nothing on your back. Saves serious bag weight.");
+  }
+
+  // BOTTOM
+  if (isHot || isWarm) {
+    outfit.push({ item: "Casual shorts or chinos", emoji: "🩳" });
+  } else if (isMild || isCool) {
+    outfit.push({ item: "Chinos or jeans", emoji: "👖" });
+    notes.push("Jeans are heavy — wear them, don't pack them.");
+  } else if (isCold) {
+    outfit.push({ item: "Jeans or insulated trousers", emoji: "👖" });
+    notes.push("Wear your heaviest trousers on the plane — saves 600–700g in the bag.");
+  }
+
+  // SHOES
+  if (isHot || isWarm) {
+    outfit.push({ item: "Trainers (Sambas etc)", emoji: "👟" });
+  } else if (isCool || isCold) {
+    outfit.push({ item: "Trainers — your heaviest pair", emoji: "👟" });
+    notes.push("Always wear the heaviest shoes. 800g saved in the bag.");
+  } else {
+    outfit.push({ item: "Trainers", emoji: "👟" });
+  }
+
+  // RAIN
+  if (isRain) {
+    outfit.push({ item: "Packable waterproof in your day bag", emoji: "🌧️" });
+    notes.push("Keep the waterproof accessible — not buried. Rain chance is high.");
+  }
+
+  // Weight note — what you're saving by wearing vs packing
+  const wornWeight = isCold
+    ? "~2.5kg worn rather than packed (coat, jumper, jeans, trainers)"
+    : isCool
+      ? "~1.8kg worn rather than packed (jumper, jeans, trainers)"
+      : isMild
+        ? "~1.4kg worn rather than packed (jumper, chinos, trainers)"
+        : "~1kg worn rather than packed (trainers + bottoms)";
+
+  return { outfit, notes, wornWeight };
+}
+
 // ─────────────────────────────────────────────
 // PACKING CUBES
 // ─────────────────────────────────────────────
@@ -598,7 +673,7 @@ export default function PackingApp() {
   const band = getWeatherBand(weather);
   const { cards } = buildAdvisory({ totalDays, workDays: mode === "holiday" ? 0 : workDays, mode, band, weather });
 
-  const TOILETRY_WEIGHTS = { mini: 280, carryon: 650, full: 1400 };
+  const TOILETRY_WEIGHTS = { carryon: 650, full: 1400 };
 
   const displayCards = cards.map(c => {
     if (c.isToletryCta) return { ...c, weight: TOILETRY_WEIGHTS[toiletryBag] };
@@ -663,6 +738,55 @@ export default function PackingApp() {
             Packing to do some roadie'ing.
           </p>
         </div>
+
+        {/* Travel Day One box — always visible */}
+        {(() => {
+          const travelOutfit = getTravelDayOutfit({ band, mode, weather });
+          return (
+            <div style={{
+              marginBottom: 36, padding: "20px 24px",
+              background: t.card, border: `1px solid ${t.border}`,
+              borderRadius: 14, borderLeft: `3px solid ${t.accent}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: t.accent }}>
+                  Travel Day — Wear This
+                </span>
+                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, fontStyle: "italic" }}>
+                  {destInfo
+                    ? `${wxEmoji(destInfo)} ${destInfo.minTemp}–${destInfo.maxTemp}°C`
+                    : weather ? `${wxEmoji(weather)} forecast loaded` : "Add a destination for weather-specific advice"}
+                </span>
+              </div>
+
+              {/* Outfit items */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                {travelOutfit.outfit.map((item, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.emoji}</span>
+                    <span style={{ fontSize: 15, color: t.text }}>{item.item}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Notes */}
+              {travelOutfit.notes.length > 0 && (
+                <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {travelOutfit.notes.map((note, i) => (
+                    <p key={i} style={{ margin: 0, fontSize: 12, color: t.muted, fontStyle: "italic", lineHeight: 1.5, fontFamily: "inherit" }}>
+                      {note}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* Weight saved note */}
+              <p style={{ margin: "10px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.accent, letterSpacing: "0.3px" }}>
+                ↑ {travelOutfit.wornWeight}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Mode selector — elegant tab row */}
         {!packMode && (
