@@ -558,11 +558,10 @@ const CUBE_ASSIGNMENTS = {
 function buildCubes(packableCards, confirmedWornMap = {}) {
   const cubes = { 1: [], 2: [], 3: [], 4: [], 0: [] };
   packableCards.forEach(card => {
-    if (card.qty === 0 || card.isToletryCta) return;
-    // How many are actually going in the bag (not worn)
-    const wornCount = confirmedWornMap[card.category] || 0;
-    const packedQty = Math.max(0, card.qty - wornCount);
-    if (packedQty === 0) return; // fully worn — skip from cubes entirely
+    if (card.isToletryCta) return;
+    // packedQty is already baked into displayCards — just use it
+    const packedQty = card.packedQty ?? card.qty;
+    if (packedQty === 0) return; // fully worn or zero — skip
     const assignment = CUBE_ASSIGNMENTS[card.category];
     const cubeId = assignment ? assignment.cube : 2;
     const label  = assignment ? assignment.label : "Casual";
@@ -570,7 +569,6 @@ function buildCubes(packableCards, confirmedWornMap = {}) {
     const note   = assignment ? assignment.note : "";
     cubes[cubeId].push({ ...card, qty: packedQty, cubeLabel: label, cubeEmoji: emoji, cubeNote: note });
   });
-  // Toiletry bag always in outside section
   cubes[0].push({
     category: "Toiletry bag", qty: 1, emoji: "🪥",
     cubeLabel: "Top pocket / outer zip", cubeNote: "Quick access at security",
@@ -679,23 +677,10 @@ export default function PackingApp() {
 
   const TOILETRY_WEIGHTS = { carryon: 650, full: 1400 };
 
-  const displayCards = cards.map(c => {
-    if (c.isToletryCta) return { ...c, weight: TOILETRY_WEIGHTS[toiletryBag] };
-    if (c.isSection) return { ...c, qty: 0, weight: 0 };
-    const qty = overrides[c.category] ?? c.qty;
-    // Use per-unit weight from WEIGHTS table if available, otherwise derive from card
-    const unitWeight = WEIGHTS[c.category] || Math.round(c.weight / (c.qty || 1));
-    return { ...c, qty, weight: unitWeight * qty };
-  });
-
-  const packableCards = displayCards.filter(c => !c.isSection);
-  const clothingKg    = parseFloat((packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1));
-  const checkedCount  = packableCards.filter(c => checked[c.category]).length;
-  const t = THEMES[mode];
-
+  // Build travel outfit and confirmed worn map FIRST — needed for qty calc below
   const travelOutfit = getTravelDayOutfit({ band, mode, weather });
+  const { wornMap } = travelOutfit;
 
-  // Build confirmed worn map from user selections
   const confirmedWornMap = {};
   travelOutfit.outfit.forEach(o => {
     if (o.wears && travelWorn[o.wears]) {
@@ -703,15 +688,28 @@ export default function PackingApp() {
     }
   });
 
-  const { wornMap } = travelOutfit;
-  const effectiveQty = (cat, qty) => Math.max(0, qty - (confirmedWornMap[cat] || 0));
+  // displayCards — qty and weight account for confirmed worn items
+  const displayCards = cards.map(c => {
+    if (c.isToletryCta) return { ...c, weight: TOILETRY_WEIGHTS[toiletryBag] };
+    if (c.isSection) return { ...c, qty: 0, weight: 0 };
+    const baseQty    = overrides[c.category] ?? c.qty;
+    const wornQty    = confirmedWornMap[c.category] || 0;
+    const packedQty  = Math.max(0, baseQty - wornQty);
+    const unitWeight = WEIGHTS[c.category] || Math.round(c.weight / (c.qty || 1));
+    return { ...c, qty: baseQty, packedQty, wornQty, weight: unitWeight * packedQty };
+  });
 
-  // Subtract confirmed worn item weights from bag weight
+  const packableCards = displayCards.filter(c => !c.isSection);
+  const clothingKg    = parseFloat((packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1));
+  const checkedCount  = packableCards.filter(c => checked[c.category]).length;
+  const t = THEMES[mode];
+
+  // wornWeightG is now implicit in displayCards weights but keep for display
   const wornWeightG   = Object.entries(confirmedWornMap).reduce((sum, [cat, qty]) => {
     return sum + (WEIGHTS[cat] || 200) * qty;
   }, 0);
 
-  const bagClothingKg = parseFloat(((packableCards.reduce((s,c) => s + c.weight, 0) - wornWeightG) / 1000).toFixed(1));
+  const bagClothingKg = clothingKg; // already has worn items subtracted via packedQty
   const totalKg       = parseFloat((bagClothingKg + kitWeight).toFixed(1));
 
   const adjQty = (cat, delta) => setOverrides(o => ({
@@ -1220,9 +1218,16 @@ export default function PackingApp() {
                               display: "flex", alignItems: "center", justifyContent: "center",
                               fontFamily: "inherit",
                             }}>−</button>
-                            <span style={{ fontFamily: "system-ui, sans-serif", fontWeight: 600, fontSize: 16, color: t.accent, minWidth: 20, textAlign: "center" }}>
-                              {card.qty}
-                            </span>
+                            <div style={{ textAlign: "center" }}>
+                              <span style={{ fontFamily: "system-ui, sans-serif", fontWeight: 600, fontSize: 16, color: t.accent, minWidth: 20, display: "block" }}>
+                                {card.packedQty ?? card.qty}
+                              </span>
+                              {card.wornQty > 0 && (
+                                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 9, color: t.muted, display: "block", lineHeight: 1 }}>
+                                  +{card.wornQty} worn
+                                </span>
+                              )}
+                            </div>
                             <button onClick={() => adjQty(card.category, 1)} style={{
                               width: 26, height: 26, borderRadius: "50%",
                               border: `1px solid ${t.border}`, background: "transparent",
@@ -1234,7 +1239,16 @@ export default function PackingApp() {
                         )}
 
                         {packMode && (
-                          <span style={{ fontFamily: "system-ui, sans-serif", fontWeight: 600, fontSize: 16, color: t.accent }}>{card.qty}</span>
+                          <div style={{ textAlign: "center" }}>
+                            <span style={{ fontFamily: "system-ui, sans-serif", fontWeight: 600, fontSize: 16, color: t.accent, display: "block" }}>
+                              {card.packedQty ?? card.qty}
+                            </span>
+                            {card.wornQty > 0 && (
+                              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 9, color: t.muted, display: "block", lineHeight: 1 }}>
+                                +{card.wornQty} worn
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
