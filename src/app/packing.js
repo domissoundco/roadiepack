@@ -447,68 +447,67 @@ function getTravelDayOutfit({ band, mode, weather }) {
   const isCool = band.startsWith("cool");
   const isCold = band.startsWith("cold");
   const isRain = band.includes("wet");
-  const maxTemp = weather?.maxTemp;
-  const minTemp = weather?.minTemp;
 
   const outfit = [];
   const notes  = [];
 
-  // TOP
+  // TOP — wears maps to packing list category
   if (isHot || isWarm) {
-    outfit.push({ item: "Travel top (t-shirt or polo)", emoji: "👕" });
+    outfit.push({ item: "Travel top (t-shirt or polo)", emoji: "👕", wears: "Travel tops" });
     notes.push("Light, breathable — airports are warm and you'll be moving.");
   } else if (isMild) {
-    outfit.push({ item: "Travel top (t-shirt or smart top)", emoji: "👕" });
-    outfit.push({ item: "Mid-weight jumper over the top", emoji: "🧶" });
+    outfit.push({ item: "Travel top (t-shirt or smart top)", emoji: "👕", wears: "Travel tops" });
+    outfit.push({ item: "Mid-weight jumper over the top", emoji: "🧶", wears: "Mid-weight jumper" });
     notes.push("Jumper on for the journey, easy to ditch if the airport is hot.");
   } else if (isCool) {
-    outfit.push({ item: "Travel top", emoji: "👕" });
-    outfit.push({ item: "Thick knit jumper", emoji: "🧶" });
+    outfit.push({ item: "Travel top", emoji: "👕", wears: "Travel tops" });
+    outfit.push({ item: "Thick knit jumper", emoji: "🧶", wears: "Thick knit / chunky jumper" });
     notes.push("Layer up — you can always remove it through security.");
   } else if (isCold) {
-    outfit.push({ item: "Base layer top", emoji: "🧤" });
-    outfit.push({ item: "Heavy knit jumper", emoji: "🧶" });
-    outfit.push({ item: "Heavy coat", emoji: "🧥" });
-    notes.push("Wear the coat — it's your heaviest item and costs nothing on your back. Saves serious bag weight.");
+    outfit.push({ item: "Base layer top", emoji: "🧤", wears: "Base layer top" });
+    outfit.push({ item: "Heavy knit jumper", emoji: "🧶", wears: "Heavy knit jumper" });
+    outfit.push({ item: "Heavy coat", emoji: "🧥", wears: "Heavy coat" });
+    notes.push("Wear the coat — heaviest item, costs nothing on your back.");
   }
 
   // BOTTOM
   if (isHot || isWarm) {
-    outfit.push({ item: "Casual shorts or chinos", emoji: "🩳" });
+    outfit.push({ item: "Casual shorts or chinos", emoji: "🩳", wears: "Casual shorts" });
   } else if (isMild || isCool) {
-    outfit.push({ item: "Chinos or jeans", emoji: "👖" });
+    outfit.push({ item: "Chinos or jeans", emoji: "👖", wears: "Chinos / smart casual trousers" });
     notes.push("Jeans are heavy — wear them, don't pack them.");
   } else if (isCold) {
-    outfit.push({ item: "Jeans or insulated trousers", emoji: "👖" });
-    notes.push("Wear your heaviest trousers on the plane — saves 600–700g in the bag.");
+    outfit.push({ item: "Jeans or insulated trousers", emoji: "👖", wears: "Jeans / insulated trousers" });
+    notes.push("Wear your heaviest trousers — saves 600–700g in the bag.");
   }
 
-  // SHOES
+  // SHOES — always worn
   if (isHot || isWarm) {
-    outfit.push({ item: "Trainers (Sambas etc)", emoji: "👟" });
-  } else if (isCool || isCold) {
-    outfit.push({ item: "Trainers — your heaviest pair", emoji: "👟" });
-    notes.push("Always wear the heaviest shoes. 800g saved in the bag.");
+    outfit.push({ item: "Trainers (Sambas etc)", emoji: "👟", wears: "Trainers" });
   } else {
-    outfit.push({ item: "Trainers", emoji: "👟" });
+    outfit.push({ item: "Trainers — your heaviest pair", emoji: "👟", wears: "Trainers" });
+    notes.push("Always wear the heaviest shoes. 800g saved in the bag.");
   }
 
   // RAIN
   if (isRain) {
-    outfit.push({ item: "Packable waterproof in your day bag", emoji: "🌧️" });
-    notes.push("Keep the waterproof accessible — not buried. Rain chance is high.");
+    outfit.push({ item: "Packable waterproof in your day bag", emoji: "🌧️", wears: "Packable waterproof" });
+    notes.push("Keep the waterproof accessible — not buried.");
   }
 
-  // Weight note — what you're saving by wearing vs packing
   const wornWeight = isCold
     ? "~2.5kg worn rather than packed (coat, jumper, jeans, trainers)"
-    : isCool
-      ? "~1.8kg worn rather than packed (jumper, jeans, trainers)"
-      : isMild
-        ? "~1.4kg worn rather than packed (jumper, chinos, trainers)"
-        : "~1kg worn rather than packed (trainers + bottoms)";
+    : isCool ? "~1.8kg worn rather than packed (jumper, jeans, trainers)"
+    : isMild ? "~1.4kg worn rather than packed (jumper, chinos, trainers)"
+    : "~1kg worn rather than packed (trainers + bottoms)";
 
-  return { outfit, notes, wornWeight };
+  // Build worn map: category → count worn on travel day
+  const wornMap = {};
+  outfit.forEach(o => {
+    if (o.wears) wornMap[o.wears] = (wornMap[o.wears] || 0) + 1;
+  });
+
+  return { outfit, notes, wornWeight, wornMap };
 }
 
 // ─────────────────────────────────────────────
@@ -690,6 +689,9 @@ export default function PackingApp() {
   const checkedCount  = packableCards.filter(c => checked[c.category]).length;
   const t = THEMES[mode];
 
+  const travelOutfit = getTravelDayOutfit({ band, mode, weather });
+  const { wornMap } = travelOutfit;
+
   const adjQty = (cat, delta) => setOverrides(o => ({
     ...o,
     [cat]: Math.max(0, (o[cat] ?? (cards.find(c => c.category === cat)?.qty || 1)) + delta),
@@ -741,7 +743,6 @@ export default function PackingApp() {
 
         {/* Travel Day One box — always visible */}
         {(() => {
-          const travelOutfit = getTravelDayOutfit({ band, mode, weather });
           return (
             <div style={{
               marginBottom: 36, padding: "20px 24px",
@@ -1098,6 +1099,24 @@ export default function PackingApp() {
                         fontSize: 18, fontWeight: 400, letterSpacing: "-0.2px",
                         textDecoration: isDone ? "line-through" : "none", color: t.text,
                       }}>{card.category}</span>
+
+                      {/* Worn / packed split tag */}
+                      {wornMap[card.category] && !packMode && (() => {
+                        const worn = wornMap[card.category];
+                        const packed = Math.max(0, card.qty - worn);
+                        return (
+                          <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                            {packed > 0 && (
+                              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, padding: "2px 8px", borderRadius: 4, background: t.accentLight, color: t.accent, letterSpacing: "0.3px" }}>
+                                {packed} packed
+                              </span>
+                            )}
+                            <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, padding: "2px 8px", borderRadius: 4, background: t.chip, color: t.muted, letterSpacing: "0.3px" }}>
+                              {worn} worn travel day
+                            </span>
+                          </div>
+                        );
+                      })()}
 
                       {/* Right side: weight + controls */}
                       <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
