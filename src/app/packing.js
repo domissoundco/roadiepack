@@ -555,18 +555,22 @@ const CUBE_ASSIGNMENTS = {
   "Toiletry bag":              { cube: 0, label: "Top pocket / outer zip", emoji: "🪥", note: "Quick access at security" },
 };
 
-function buildCubes(packableCards) {
+function buildCubes(packableCards, confirmedWornMap = {}) {
   const cubes = { 1: [], 2: [], 3: [], 4: [], 0: [] };
   packableCards.forEach(card => {
     if (card.qty === 0 || card.isToletryCta) return;
+    // How many are actually going in the bag (not worn)
+    const wornCount = confirmedWornMap[card.category] || 0;
+    const packedQty = Math.max(0, card.qty - wornCount);
+    if (packedQty === 0) return; // fully worn — skip from cubes entirely
     const assignment = CUBE_ASSIGNMENTS[card.category];
-    const cubeId = assignment ? assignment.cube : 2; // default to casual cube
-    const label = assignment ? assignment.label : "Casual";
-    const emoji = assignment ? assignment.emoji : "👜";
-    const note  = assignment ? assignment.note : "";
-    cubes[cubeId].push({ ...card, cubeLabel: label, cubeEmoji: emoji, cubeNote: note });
+    const cubeId = assignment ? assignment.cube : 2;
+    const label  = assignment ? assignment.label : "Casual";
+    const emoji  = assignment ? assignment.emoji : "👜";
+    const note   = assignment ? assignment.note : "";
+    cubes[cubeId].push({ ...card, qty: packedQty, cubeLabel: label, cubeEmoji: emoji, cubeNote: note });
   });
-  // Add toiletry bag manually to outside section
+  // Toiletry bag always in outside section
   cubes[0].push({
     category: "Toiletry bag", qty: 1, emoji: "🪥",
     cubeLabel: "Top pocket / outer zip", cubeNote: "Quick access at security",
@@ -623,7 +627,8 @@ export default function PackingApp() {
   const [toiletryBag, setToiletryBag] = useState("carryon");
   const [view, setView]             = useState("list");
   const [cubeChecked, setCubeChecked] = useState({});
-  const [kitWeight, setKitWeight]   = useState(0); // extra kit in kg (interface, cables, plugs etc)
+  const [kitWeight, setKitWeight]   = useState(0);
+  const [travelWorn, setTravelWorn] = useState({}); // category → true if confirmed worn
 
   useEffect(() => {
     let cancelled = false;
@@ -685,12 +690,29 @@ export default function PackingApp() {
 
   const packableCards = displayCards.filter(c => !c.isSection);
   const clothingKg    = parseFloat((packableCards.reduce((s,c) => s + c.weight, 0) / 1000).toFixed(1));
-  const totalKg       = parseFloat((clothingKg + kitWeight).toFixed(1));
   const checkedCount  = packableCards.filter(c => checked[c.category]).length;
   const t = THEMES[mode];
 
   const travelOutfit = getTravelDayOutfit({ band, mode, weather });
+
+  // Build confirmed worn map from user selections
+  const confirmedWornMap = {};
+  travelOutfit.outfit.forEach(o => {
+    if (o.wears && travelWorn[o.wears]) {
+      confirmedWornMap[o.wears] = (confirmedWornMap[o.wears] || 0) + 1;
+    }
+  });
+
   const { wornMap } = travelOutfit;
+  const effectiveQty = (cat, qty) => Math.max(0, qty - (confirmedWornMap[cat] || 0));
+
+  // Subtract confirmed worn item weights from bag weight
+  const wornWeightG   = Object.entries(confirmedWornMap).reduce((sum, [cat, qty]) => {
+    return sum + (WEIGHTS[cat] || 200) * qty;
+  }, 0);
+
+  const bagClothingKg = parseFloat(((packableCards.reduce((s,c) => s + c.weight, 0) - wornWeightG) / 1000).toFixed(1));
+  const totalKg       = parseFloat((bagClothingKg + kitWeight).toFixed(1));
 
   const adjQty = (cat, delta) => setOverrides(o => ({
     ...o,
@@ -707,13 +729,13 @@ export default function PackingApp() {
   // Bag recommendation — real empty bag weights baked in:
   // Backpack ~1.5kg empty · Tumi 19" carry-on 5kg empty · Checked case 4kg empty
   // Thresholds on CLOTHING weight only — bag weight added for display
-  const bagData = clothingKg <= 8.5
-    ? { label: "Backpack",         total: (clothingKg + 1.5 + kitWeight).toFixed(1), note: "1.5kg bag" }
-    : clothingKg <= 10.0
-      ? { label: "Tumi 19\" carry-on", total: (clothingKg + 5 + kitWeight).toFixed(1), note: "5kg bag · carry-on limit ~15kg" }
-      : clothingKg <= 19.0
-        ? { label: "Checked case",    total: (clothingKg + 4 + kitWeight).toFixed(1), note: "4kg case · checked limit ~23kg" }
-        : { label: "Over limit",       total: "—", note: "Cut something — you're over checked bag weight" };
+  const bagData = bagClothingKg <= 8.5
+    ? { label: "Backpack",            total: (bagClothingKg + 1.5 + kitWeight).toFixed(1), note: "1.5kg bag" }
+    : bagClothingKg <= 10.0
+      ? { label: "Tumi 19\" carry-on", total: (bagClothingKg + 5 + kitWeight).toFixed(1),   note: "5kg bag · carry-on limit ~15kg" }
+      : bagClothingKg <= 19.0
+        ? { label: "Checked case",     total: (bagClothingKg + 4 + kitWeight).toFixed(1),   note: "4kg case · checked limit ~23kg" }
+        : { label: "Over limit",        total: "—", note: "Cut something — you're over checked bag weight" };
 
   const bagNote = `${bagData.label} — ${bagData.total}kg total · ${bagData.note}`;
 
@@ -749,25 +771,81 @@ export default function PackingApp() {
               background: t.card, border: `1px solid ${t.border}`,
               borderRadius: 14, borderLeft: `3px solid ${t.accent}`,
             }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: t.accent }}>
-                  Travel Day — Wear This
+                  Travel Day — What You're Wearing
                 </span>
                 <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, fontStyle: "italic" }}>
                   {cityRows.length > 0 && !cityRows[0].error
                     ? `${wxEmoji(cityRows[0])} ${cityRows[0].minTemp}–${cityRows[0].maxTemp}°C`
-                    : weather ? `${wxEmoji(weather)} forecast loaded` : "Add a destination for weather-specific advice"}
+                    : weather ? `${wxEmoji(weather)} forecast loaded` : "Add a destination"}
                 </span>
               </div>
+              <p style={{ margin: "0 0 12px", fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted }}>
+                Tap to confirm what you're wearing — these won't go in the bag.
+              </p>
 
-              {/* Outfit items */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                {travelOutfit.outfit.map((item, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.emoji}</span>
-                    <span style={{ fontSize: 15, color: t.text }}>{item.item}</span>
+              {/* Outfit items — tap to confirm */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+                {travelOutfit.outfit.map((item, i) => {
+                  const isWorn = item.wears && travelWorn[item.wears];
+                  return (
+                    <div key={i}
+                      onClick={() => item.wears && setTravelWorn(p => ({ ...p, [item.wears]: !p[item.wears] }))}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 12px", borderRadius: 8,
+                        background: isWorn ? t.accentLight : t.chip,
+                        border: `1px solid ${isWorn ? t.accent : "transparent"}`,
+                        cursor: item.wears ? "pointer" : "default",
+                        transition: "all 0.15s", userSelect: "none",
+                      }}>
+                      {item.wears && (
+                        <div style={{
+                          width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                          border: `1.5px solid ${isWorn ? t.accent : t.border}`,
+                          background: isWorn ? t.accent : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.15s",
+                        }}>
+                          {isWorn && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                        </div>
+                      )}
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{item.emoji}</span>
+                      <span style={{ fontSize: 14, color: t.text, flex: 1 }}>{item.item}</span>
+                      {isWorn
+                        ? <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.accent }}>not in bag</span>
+                        : <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted }}>tap to confirm</span>
+                      }
+                    </div>
+                  );
+                })}
+
+                {/* Manual override — trousers on plane for hot/warm destinations */}
+                {(band.startsWith("hot") || band.startsWith("warm")) && (
+                  <div
+                    onClick={() => setTravelWorn(p => ({ ...p, "__trousers_override": !p["__trousers_override"] }))}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", borderRadius: 8,
+                      background: travelWorn["__trousers_override"] ? t.accentLight : "transparent",
+                      border: `1px dashed ${travelWorn["__trousers_override"] ? t.accent : t.border}`,
+                      cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+                    }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                      border: `1.5px solid ${travelWorn["__trousers_override"] ? t.accent : t.border}`,
+                      background: travelWorn["__trousers_override"] ? t.accent : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {travelWorn["__trousers_override"] && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 16 }}>👖</span>
+                    <span style={{ fontSize: 14, color: t.muted, flex: 1, fontStyle: "italic" }}>
+                      Trousers instead (long haul / cold hub airport)
+                    </span>
                   </div>
-                ))}
+                )}
               </div>
 
               {/* Notes */}
@@ -781,9 +859,11 @@ export default function PackingApp() {
                 </div>
               )}
 
-              {/* Weight saved note */}
+              {/* Weight saved */}
               <p style={{ margin: "10px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.accent, letterSpacing: "0.3px" }}>
-                ↑ {travelOutfit.wornWeight}
+                {wornWeightG > 0
+                  ? `✓ ${(wornWeightG/1000).toFixed(1)}kg confirmed on your body — not in the bag`
+                  : `↑ ${travelOutfit.wornWeight}`}
               </p>
             </div>
           );
@@ -922,7 +1002,7 @@ export default function PackingApp() {
 
         {/* Cubes view */}
         {view === "cubes" && (() => {
-          const cubes = buildCubes(packableCards);
+          const cubes = buildCubes(packableCards, confirmedWornMap);
           return (
             <div style={{ display: "grid", gap: 20 }}>
               {[1, 2, 3, 4, 0].map(cubeId => {
@@ -1100,10 +1180,11 @@ export default function PackingApp() {
                         textDecoration: isDone ? "line-through" : "none", color: t.text,
                       }}>{card.category}</span>
 
-                      {/* Worn / packed split tag */}
+                      {/* Worn / packed split tag — updates when travel day items confirmed */}
                       {wornMap[card.category] && !packMode && (() => {
-                        const worn = wornMap[card.category];
-                        const packed = Math.max(0, card.qty - worn);
+                        const totalWorn = wornMap[card.category];
+                        const confirmed = confirmedWornMap[card.category] || 0;
+                        const packed = Math.max(0, card.qty - confirmed);
                         return (
                           <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                             {packed > 0 && (
@@ -1111,9 +1192,15 @@ export default function PackingApp() {
                                 {packed} packed
                               </span>
                             )}
-                            <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, padding: "2px 8px", borderRadius: 4, background: t.chip, color: t.muted, letterSpacing: "0.3px" }}>
-                              {worn} worn travel day
-                            </span>
+                            {confirmed > 0 ? (
+                              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, padding: "2px 8px", borderRadius: 4, background: t.chip, color: t.accent, fontWeight: 600, letterSpacing: "0.3px" }}>
+                                ✓ {confirmed} worn — not in bag
+                              </span>
+                            ) : (
+                              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, padding: "2px 8px", borderRadius: 4, background: t.chip, color: t.muted, letterSpacing: "0.3px" }}>
+                                {totalWorn} worn travel day
+                              </span>
+                            )}
                           </div>
                         );
                       })()}
@@ -1188,10 +1275,15 @@ export default function PackingApp() {
         {/* Weight + bag note — always visible */}
         <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
-            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>Clothing weight</p>
+            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>In the bag</p>
             <span style={{ fontSize: 48, fontWeight: 300, color: t.text, lineHeight: 1, letterSpacing: "-1px" }}>
-              {clothingKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
+              {bagClothingKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
             </span>
+            {wornWeightG > 0 && (
+              <p style={{ margin: "4px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: t.muted }}>
+                + {(wornWeightG/1000).toFixed(1)}kg on your body · {clothingKg}kg total clothing
+              </p>
+            )}
             {kitWeight > 0 && (
               <p style={{ margin: "4px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 13, color: t.muted }}>
                 + {kitWeight}kg kit = <strong style={{ color: t.text }}>{totalKg}kg</strong> total before bag
