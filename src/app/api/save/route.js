@@ -34,7 +34,7 @@ export async function POST(req) {
 
     try {
       await resend.emails.send({
-        from: "Roadie Pack <onboarding@resend.dev>",
+        from: "Roadie Pack <roadiepack@domissound.co>",
         to: email,
         subject: `${name}'s packing list — Roadie Pack`,
         html: `
