@@ -26,7 +26,7 @@ export async function POST(req) {
     const resend     = new Resend(process.env.RESEND_API_KEY);
 
     await resend.emails.send({
-      from: "Roadie Pack <noreply@roadiepack.app>",
+      from: "Roadie Pack <onboarding@resend.dev>",
       to: email,
       subject: `${name}'s packing list — Roadie Pack`,
       html: `
