@@ -14,32 +14,26 @@ export async function POST(req) {
     const token = randomBytes(16).toString("hex");
     const data  = { name, email, state, savedAt: Date.now() };
 
-    // Store as a JSON blob
-    let blobResult;
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    console.log("Blob token present:", !!blobToken, "length:", blobToken?.length);
+
     try {
-      blobResult = await put(`lists/${token}.json`, JSON.stringify(data), {
+      await put(`lists/${token}.json`, JSON.stringify(data), {
         access: "public",
         contentType: "application/json",
+        token: blobToken,
       });
-      console.log("Blob saved:", blobResult.url);
     } catch (blobErr) {
-      console.error("Blob error:", blobErr);
+      console.error("Blob error:", blobErr.message);
       return NextResponse.json({ error: "Storage failed", detail: blobErr.message }, { status: 500 });
     }
 
-    // Send magic link via Resend
     const baseUrl   = process.env.NEXT_PUBLIC_BASE_URL || "https://roadiepack.vercel.app";
     const magicLink = `${baseUrl}/?token=${token}`;
+    const resend    = new Resend(process.env.RESEND_API_KEY);
 
-    console.log("RESEND_API_KEY present:", !!process.env.RESEND_API_KEY);
-    console.log("Sending to:", email);
-    console.log("Magic link:", magicLink);
-
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    let emailResult;
     try {
-      emailResult = await resend.emails.send({
+      await resend.emails.send({
         from: "Roadie Pack <onboarding@resend.dev>",
         to: email,
         subject: `${name}'s packing list — Roadie Pack`,
@@ -52,25 +46,17 @@ export async function POST(req) {
               Open my list →
             </a>
             <p style="margin: 32px 0 0; font-size: 12px; color: #78716c;">Restores your exact setup — mode, days, destinations, everything.</p>
-            <p style="margin: 8px 0 0; font-size: 12px; color: #78716c;">Bookmark it or save this email.</p>
           </div>
         `,
       });
-      console.log("Email result:", JSON.stringify(emailResult));
     } catch (emailErr) {
-      console.error("Email error:", emailErr);
-      // Still return success — list was saved, email just failed
-      return NextResponse.json({ 
-        success: true, 
-        token, 
-        emailError: emailErr.message,
-        warning: "List saved but email failed to send"
-      });
+      console.error("Email error:", emailErr.message);
+      return NextResponse.json({ success: true, token, warning: "List saved but email failed" });
     }
 
     return NextResponse.json({ success: true, token });
   } catch (err) {
-    console.error("Save error:", err);
+    console.error("Save error:", err.message);
     return NextResponse.json({ error: "Failed to save", detail: err.message }, { status: 500 });
   }
 }
