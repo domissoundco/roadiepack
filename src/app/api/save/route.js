@@ -74,4 +74,3 @@ export async function POST(req) {
     return NextResponse.json({ error: "Failed to save", detail: err.message }, { status: 500 });
   }
 }
-
