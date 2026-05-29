@@ -626,6 +626,7 @@ export default function PackingApp() {
   const [view, setView]             = useState("list");
   const [cubeChecked, setCubeChecked] = useState({});
   const [kitWeight, setKitWeight]   = useState(0);
+  const [kitWeightStr, setKitWeightStr] = useState("");
   const [travelWorn, setTravelWorn] = useState({});
   const [bagChoice, setBagChoice]   = useState("tumi");
   const [dayBagChecked, setDayBagChecked]   = useState({});
@@ -693,7 +694,7 @@ export default function PackingApp() {
     if (s.workDays !== undefined) setWorkDays(s.workDays);
     if (s.mode)         setMode(s.mode);
     if (s.destination)  setDest(s.destination);
-    if (s.kitWeight !== undefined) setKitWeight(s.kitWeight);
+    if (s.kitWeight !== undefined) { setKitWeight(s.kitWeight); setKitWeightStr(s.kitWeight === 0 ? "" : String(s.kitWeight)); }
     if (s.bagChoice)    setBagChoice(s.bagChoice);
     if (s.overrides)    setOverrides(s.overrides);
     if (s.toiletryBag)  setToiletryBag(s.toiletryBag);
@@ -1154,20 +1155,19 @@ export default function PackingApp() {
             </div>
             <div>
               <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Extra kit weight (kg)</label>
-              <input type="text" inputMode="decimal" value={kitWeight === 0 ? "" : kitWeight} style={inp}
+              <input type="text" inputMode="decimal" style={inp}
+                value={kitWeightStr}
                 onFocus={e => e.target.select()}
                 onChange={e => {
                   const v = e.target.value;
-                  // Allow typing decimal — only reject non-numeric/decimal chars
-                  if (v === "" || v === "." || /^\d*\.?\d*$/.test(v)) {
-                    setKitWeight(v === "" || v === "." ? v : parseFloat(v) || 0);
+                  if (/^\d*\.?\d*$/.test(v) || v === "") {
+                    setKitWeightStr(v);
+                    const n = parseFloat(v);
+                    setKitWeight(isNaN(n) ? 0 : n);
                   }
                 }}
-                onBlur={e => {
-                  const v = parseFloat(e.target.value);
-                  setKitWeight(isNaN(v) ? 0 : v);
-                }}
-                placeholder="e.g. 2.5 for interface + cables + plugs" />
+                onBlur={() => setKitWeightStr(kitWeight === 0 ? "" : String(kitWeight))}
+                placeholder="e.g. 2.5" />
             </div>
           </div>
         )}
