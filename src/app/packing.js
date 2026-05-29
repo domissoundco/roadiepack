@@ -491,7 +491,7 @@ function getTravelDayOutfit({ band, mode, weather }) {
 
   // RAIN
   if (isRain) {
-    outfit.push({ item: "Packable waterproof in your day bag", emoji: "🌧️", wears: "Packable waterproof" });
+    outfit.push({ item: "Packable waterproof — keep in backpack", emoji: "🌧️", wears: "Packable waterproof" });
     notes.push("Keep the waterproof accessible — not buried.");
   }
 
@@ -629,7 +629,7 @@ export default function PackingApp() {
   const [travelWorn, setTravelWorn] = useState({});
   const [bagChoice, setBagChoice]   = useState("tumi");
   const [dayBagChecked, setDayBagChecked] = useState({});
-  const [dayBagOptional, setDayBagOptional] = useState({ ipad: false, pencil: false, kindle: false, eyemask: false, snacks: false });
+  const [dayBagOptional, setDayBagOptional] = useState({ ipad: false, pencil: false, kindle: false, eyemask: false, snacks: false, sanitiser: false, wallet: false, phone: false });
   const [saveModal, setSaveModal]   = useState(false);
   const [saveName, setSaveName]     = useState("");
   const [saveEmail, setSaveEmail]   = useState("");
@@ -775,19 +775,38 @@ export default function PackingApp() {
     { id: "sunglasses", label: "Sunglasses",               emoji: "🕶️", note: "", always: true },
     { id: "pen",        label: "Pen",                      emoji: "🖊️", note: "Customs forms, sign things. Always need one.", always: true },
     { id: "meds",       label: "Painkillers / basic meds", emoji: "💊", note: "Ibuprofen, antihistamine, anything regular", always: true },
-    { id: "sanitiser",  label: "Hand sanitiser",           emoji: "🧴", note: "Small one, fits in pocket", always: true },
-    { id: "wallet",     label: "Wallet + cards",           emoji: "💳", note: "Notify your bank before travelling", always: true },
-    { id: "phone",      label: "Phone + charger",          emoji: "📱", note: "", always: true },
-    // Optional
+    // Optional extras
+    { id: "sanitiser",  label: "Hand sanitiser",           emoji: "🧴", note: "Small one, fits in pocket", optional: "sanitiser" },
+    { id: "wallet",     label: "Wallet + cards",           emoji: "💳", note: "Notify your bank before travelling", optional: "wallet" },
+    { id: "phone",      label: "Phone + charger",          emoji: "📱", note: "", optional: "phone" },
     { id: "ipad",       label: "iPad",                     emoji: "📱", note: "", optional: "ipad" },
     { id: "pencil",     label: "Apple Pencil",             emoji: "✏️", note: "Only if iPad is coming", optional: "pencil" },
     { id: "kindle",     label: "Kindle / reading",         emoji: "📖", note: "", optional: "kindle" },
     { id: "eyemask",    label: "Eye mask + ear plugs",     emoji: "😴", note: "Long haul essential", optional: "eyemask" },
     { id: "snacks",     label: "Snacks for travel day",    emoji: "🍫", note: "Airport food is expensive and bad", optional: "snacks" },
   ];
-
   const visibleDayBagItems = DAY_BAG_ITEMS.filter(i => i.always || dayBagOptional[i.optional]);
-  const dayBagDoneCount = visibleDayBagItems.filter(i => dayBagChecked[i.id]).length;
+  const dayBagDoneCount    = visibleDayBagItems.filter(i => dayBagChecked[i.id]).length;
+
+
+  const DAY_BAG_WEIGHTS = {
+    passport: 50, laptop: 1800, powerbank: 400, cables: 300, ethernet: 80,
+    wipes: 100, headphones: 280, sunglasses: 60, pen: 20, meds: 100,
+    sanitiser: 80, wallet: 120, phone: 200, ipad: 480, pencil: 21,
+    kindle: 170, eyemask: 40, snacks: 200,
+  };
+  const BACKPACK_SHELL_WEIGHT = 400; // small folding/packable backpack
+
+  const backpackItemsWeightG = visibleDayBagItems.reduce((sum, item) => {
+    return sum + (DAY_BAG_WEIGHTS[item.id] || 0);
+  }, 0);
+
+  // When backpack is selected as main bag: tech weight counts toward total
+  // When Tumi/checked: backpack is a separate personal item, weight shown separately
+  const backpackIsSeparate = bagChoice === "tumi" || bagChoice === "checked";
+  const backpackTotalG     = backpackItemsWeightG + BACKPACK_SHELL_WEIGHT;
+  const backpackKg         = (backpackTotalG / 1000).toFixed(1);
+
 
   const band = getWeatherBand(weather);
   const { cards } = buildAdvisory({ totalDays, workDays: mode === "holiday" ? 0 : workDays, mode, band, weather });
@@ -845,16 +864,20 @@ export default function PackingApp() {
   // Backpack ~1.5kg empty · Tumi 19" carry-on 5kg empty · Checked case 4kg empty
   // Thresholds on CLOTHING weight only — bag weight added for display
   const BAG_LIMITS = {
-    backpack: { clothing: 8.5,  empty: 1.5, total: 10,  label: "Backpack",         over: "Over backpack limit — switch to Tumi or cut something" },
+    backpack: { clothing: 8.5,  empty: 1.5, total: 10,  label: "Backpack",          over: "Over backpack limit — switch to Tumi or cut something" },
     tumi:     { clothing: 10.0, empty: 5,   total: 15,  label: "Tumi 19\" carry-on", over: "Over carry-on limit — switch to checked or cut something" },
-    checked:  { clothing: 19.0, empty: 4,   total: 23,  label: "Checked case",      over: "Over checked limit — cut something" },
+    checked:  { clothing: 19.0, empty: 4,   total: 23,  label: "Checked case",       over: "Over checked limit — cut something" },
   };
   const bag = BAG_LIMITS[bagChoice];
-  const totalWithBag = parseFloat((bagClothingKg + bag.empty + kitWeight).toFixed(1));
-  const isOverLimit  = bagClothingKg > bag.clothing;
+  // Backpack mode: tech weight counts against the limit too
+  const bagCheckWeight = bagChoice === "backpack"
+    ? bagClothingKg + parseFloat((backpackTotalG / 1000).toFixed(1))
+    : bagClothingKg;
+  const isOverLimit  = bagCheckWeight > bag.clothing;
+  const totalWithBag = parseFloat((bagCheckWeight + bag.empty + kitWeight).toFixed(1));
   const bagNote      = isOverLimit
     ? bag.over
-    : `${bag.label} — ${totalWithBag}kg total (${bag.empty}kg bag + ${bagClothingKg}kg clothing${kitWeight > 0 ? ` + ${kitWeight}kg kit` : ""})`;
+    : `${bag.label} — ${totalWithBag}kg total (${bag.empty}kg bag + ${bagClothingKg}kg clothing${bagChoice === "backpack" ? ` + ${backpackKg}kg tech` : ""}${kitWeight > 0 ? ` + ${kitWeight}kg kit` : ""})`;
 
   // Backpack-specific: flag heavy items
   const backpackBulkyItems = bagChoice === "backpack"
@@ -1195,7 +1218,7 @@ export default function PackingApp() {
         {/* View tabs + pack toggle */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${t.border}` }}>
-            {[{ id: "list", label: "List" }, { id: "cubes", label: "Cubes" }, { id: "daybag", label: "Day Bag" }].map(v => (
+            {[{ id: "list", label: "List" }, { id: "cubes", label: "Cubes" }, { id: "daybag", label: "Backpack Items" }].map(v => (
               <button key={v.id} onClick={() => { setView(v.id); setPackMode(false); }}
                 style={{
                   padding: "8px 16px 7px", background: "none", border: "none", cursor: "pointer",
@@ -1315,7 +1338,7 @@ export default function PackingApp() {
           );
         })()}
 
-        {/* Day Bag view */}
+        {/* Backpack Items view */}
         {view === "daybag" && (
           <div>
             {/* Optional items toggles */}
@@ -1323,11 +1346,14 @@ export default function PackingApp() {
               <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: "0 0 10px" }}>Optional items</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {[
-                  { id: "ipad",    label: "iPad" },
-                  { id: "pencil",  label: "Apple Pencil" },
-                  { id: "kindle",  label: "Kindle" },
-                  { id: "eyemask", label: "Eye mask" },
-                  { id: "snacks",  label: "Snacks" },
+                  { id: "ipad",      label: "iPad" },
+                  { id: "pencil",    label: "Apple Pencil" },
+                  { id: "kindle",    label: "Kindle" },
+                  { id: "eyemask",   label: "Eye mask" },
+                  { id: "snacks",    label: "Snacks" },
+                  { id: "sanitiser", label: "Hand sanitiser" },
+                  { id: "wallet",    label: "Wallet + cards" },
+                  { id: "phone",     label: "Phone + charger" },
                 ].map(opt => (
                   <button key={opt.id}
                     onClick={() => setDayBagOptional(p => ({ ...p, [opt.id]: !p[opt.id] }))}
@@ -1607,7 +1633,9 @@ export default function PackingApp() {
         {/* Weight + bag note — always visible */}
         <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
-            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>In the bag</p>
+            <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>
+              {backpackIsSeparate ? "In the bag" : "Everything"}
+            </p>
             <span style={{ fontSize: 48, fontWeight: 300, color: isOverLimit ? "#B91C1C" : t.text, lineHeight: 1, letterSpacing: "-1px" }}>
               {bagClothingKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
             </span>
@@ -1619,6 +1647,17 @@ export default function PackingApp() {
             {kitWeight > 0 && (
               <p style={{ margin: "4px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 13, color: t.muted }}>
                 + {kitWeight}kg kit = <strong style={{ color: t.text }}>{totalKg}kg</strong> total before bag
+              </p>
+            )}
+            {/* Backpack shown separately when Tumi/checked is main bag */}
+            {backpackIsSeparate && (
+              <p style={{ margin: "6px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 13, color: t.muted }}>
+                + <strong style={{ color: t.text }}>{backpackKg}kg</strong> backpack (laptop, cables, powerbank{dayBagOptional.ipad ? ", iPad" : ""} etc)
+              </p>
+            )}
+            {!backpackIsSeparate && (
+              <p style={{ margin: "4px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: t.muted }}>
+                incl. ~{backpackKg}kg backpack items
               </p>
             )}
             <p style={{ margin: "6px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: isOverLimit ? "#B91C1C" : t.accent, letterSpacing: "0.3px" }}>
