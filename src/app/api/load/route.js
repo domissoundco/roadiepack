@@ -31,4 +31,3 @@ export async function GET(req) {
     return NextResponse.json({ error: "Failed to load" }, { status: 500 });
   }
 }
-
