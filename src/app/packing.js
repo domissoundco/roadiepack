@@ -1343,10 +1343,11 @@ export default function PackingApp() {
         {/* Backpack Items view */}
         {view === "daybag" && (
           <div>
-            {/* Optional items toggles */}
+            {/* Optional items + removed items — all in one pill row */}
             <div style={{ marginBottom: 20 }}>
-              <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: "0 0 10px" }}>Optional items</p>
+              <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: "0 0 10px" }}>Add / remove items</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {/* Optional extras — toggle on/off */}
                 {[
                   { id: "ipad",      label: "iPad" },
                   { id: "pencil",    label: "Apple Pencil" },
@@ -1367,6 +1368,19 @@ export default function PackingApp() {
                       color: dayBagOptional[opt.id] ? t.accent : t.muted,
                       transition: "all 0.15s",
                     }}>{dayBagOptional[opt.id] ? "✓ " : "+ "}{opt.label}</button>
+                ))}
+                {/* Removed always-items — show as greyed pills, tap to restore */}
+                {DAY_BAG_ITEMS.filter(i => i.always && dayBagExcluded[i.id]).map(item => (
+                  <button key={item.id}
+                    onClick={() => setDayBagExcluded(p => ({ ...p, [item.id]: false }))}
+                    style={{
+                      padding: "7px 14px", borderRadius: 20, cursor: "pointer",
+                      fontFamily: "system-ui, sans-serif", fontSize: 12,
+                      border: `1px dashed ${t.border}`,
+                      background: "transparent",
+                      color: t.muted, opacity: 0.6,
+                      transition: "all 0.15s",
+                    }}>+ {item.label}</button>
                 ))}
               </div>
             </div>
@@ -1436,34 +1450,6 @@ export default function PackingApp() {
                   </div>
                 );
               })}
-
-              {/* Excluded / removed items — shown below as "not taking" */}
-              {excludedDayBagItems.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                  <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: "0 0 8px" }}>
-                    Not taking
-                  </p>
-                  {excludedDayBagItems.map(item => (
-                    <div key={item.id} style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      padding: "10px 0", borderBottom: `1px solid ${t.border}`,
-                      opacity: 0.4,
-                    }}>
-                      <span style={{ fontSize: 16 }}>{item.emoji}</span>
-                      <span style={{ fontSize: 15, color: t.muted, flex: 1, textDecoration: "line-through" }}>{item.label}</span>
-                      <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted }}>~{wFmt(item.weight || 0)}</span>
-                      {/* Add back button */}
-                      <button
-                        onClick={() => setDayBagExcluded(p => ({ ...p, [item.id]: false }))}
-                        style={{
-                          fontFamily: "system-ui, sans-serif", fontSize: 11, padding: "3px 10px",
-                          borderRadius: 10, border: `1px solid ${t.border}`, background: "transparent",
-                          cursor: "pointer", color: t.muted,
-                        }}>+ add back</button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             <p style={{ margin: "20px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, fontStyle: "italic" }}>
