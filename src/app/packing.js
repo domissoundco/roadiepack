@@ -626,7 +626,15 @@ export default function PackingApp() {
   const [view, setView]             = useState("list");
   const [cubeChecked, setCubeChecked] = useState({});
   const [kitWeight, setKitWeight]   = useState(0);
-  const [travelWorn, setTravelWorn] = useState({}); // category → true if confirmed worn
+  const [travelWorn, setTravelWorn] = useState({});
+  const [bagChoice, setBagChoice]   = useState("tumi");
+  const [dayBagChecked, setDayBagChecked] = useState({});
+  const [dayBagOptional, setDayBagOptional] = useState({ ipad: false, pencil: false, kindle: false, eyemask: false, snacks: false });
+  const [saveModal, setSaveModal]   = useState(false);
+  const [saveName, setSaveName]     = useState("");
+  const [saveEmail, setSaveEmail]   = useState("");
+  const [saveStatus, setSaveStatus] = useState(""); // "" | "saving" | "sent" | "error"
+  const [loadedName, setLoadedName] = useState(""); // "backpack" | "tumi" | "checked" // category → true if confirmed worn
 
   useEffect(() => {
     let cancelled = false;
@@ -671,6 +679,115 @@ export default function PackingApp() {
     }, 700);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [destination]);
+
+  // ── SAVE / RESTORE ───────────────────────────────────────
+  // Serialise current settings to a plain object
+  const getState = () => ({
+    totalDays, workDays, mode, destination, kitWeight, bagChoice,
+    overrides, toiletryBag, dayBagOptional,
+  });
+
+  const applyState = (s) => {
+    if (s.totalDays)    setTotalDays(s.totalDays);
+    if (s.workDays !== undefined) setWorkDays(s.workDays);
+    if (s.mode)         setMode(s.mode);
+    if (s.destination)  setDest(s.destination);
+    if (s.kitWeight !== undefined) setKitWeight(s.kitWeight);
+    if (s.bagChoice)    setBagChoice(s.bagChoice);
+    if (s.overrides)    setOverrides(s.overrides);
+    if (s.toiletryBag)  setToiletryBag(s.toiletryBag);
+    if (s.dayBagOptional) setDayBagOptional(s.dayBagOptional);
+  };
+
+  // Load from token on mount, then fall back to localStorage
+  useEffect(() => {
+    async function load() {
+      try {
+        // Check URL for token
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+        if (token) {
+          const res = await fetch(`/api/load?token=${token}`);
+          if (res.ok) {
+            const data = await res.json();
+            applyState(data.state);
+            setLoadedName(data.name);
+            // Save to localStorage too
+            localStorage.setItem("roadiepack_state", JSON.stringify({ ...data.state, name: data.name }));
+            return;
+          }
+        }
+        // Fall back to localStorage
+        const saved = localStorage.getItem("roadiepack_state");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          applyState(parsed);
+          if (parsed.name) setLoadedName(parsed.name);
+        }
+      } catch (e) {
+        console.log("Load error:", e);
+      }
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save to localStorage whenever key state changes
+  useEffect(() => {
+    try {
+      const s = { ...getState(), name: loadedName };
+      localStorage.setItem("roadiepack_state", JSON.stringify(s));
+    } catch (e) {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalDays, workDays, mode, destination, kitWeight, bagChoice, overrides, toiletryBag, dayBagOptional]);
+
+  const handleSave = async () => {
+    if (!saveName.trim() || !saveEmail.trim()) return;
+    setSaveStatus("saving");
+    try {
+      const res = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: saveName.trim(), email: saveEmail.trim(), state: getState() }),
+      });
+      if (res.ok) {
+        setSaveStatus("sent");
+        setLoadedName(saveName.trim());
+        localStorage.setItem("roadiepack_state", JSON.stringify({ ...getState(), name: saveName.trim() }));
+      } else {
+        setSaveStatus("error");
+      }
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  // ── DAY BAG ITEMS ────────────────────────────────────────
+  const DAY_BAG_ITEMS = [
+    // Always packed
+    { id: "passport",   label: "Passport / ID",           emoji: "🛂", note: "Check expiry before every trip", always: true },
+    { id: "laptop",     label: "Laptop",                   emoji: "💻", note: "", always: true },
+    { id: "powerbank",  label: "Power bank",               emoji: "🔋", note: "Check airline limits — 100Wh max carry-on", always: true },
+    { id: "cables",     label: "Charging cables",          emoji: "🔌", note: "USB-C + whatever else you need", always: true },
+    { id: "ethernet",   label: "Ethernet adapter",         emoji: "🌐", note: "Venues rarely have reliable WiFi", always: true },
+    { id: "wipes",      label: "Cleaning wipes",           emoji: "🧻", note: "", always: true },
+    { id: "headphones", label: "Headphones / AirPods",     emoji: "🎧", note: "", always: true },
+    { id: "sunglasses", label: "Sunglasses",               emoji: "🕶️", note: "", always: true },
+    { id: "pen",        label: "Pen",                      emoji: "🖊️", note: "Customs forms, sign things. Always need one.", always: true },
+    { id: "meds",       label: "Painkillers / basic meds", emoji: "💊", note: "Ibuprofen, antihistamine, anything regular", always: true },
+    { id: "sanitiser",  label: "Hand sanitiser",           emoji: "🧴", note: "Small one, fits in pocket", always: true },
+    { id: "wallet",     label: "Wallet + cards",           emoji: "💳", note: "Notify your bank before travelling", always: true },
+    { id: "phone",      label: "Phone + charger",          emoji: "📱", note: "", always: true },
+    // Optional
+    { id: "ipad",       label: "iPad",                     emoji: "📱", note: "", optional: "ipad" },
+    { id: "pencil",     label: "Apple Pencil",             emoji: "✏️", note: "Only if iPad is coming", optional: "pencil" },
+    { id: "kindle",     label: "Kindle / reading",         emoji: "📖", note: "", optional: "kindle" },
+    { id: "eyemask",    label: "Eye mask + ear plugs",     emoji: "😴", note: "Long haul essential", optional: "eyemask" },
+    { id: "snacks",     label: "Snacks for travel day",    emoji: "🍫", note: "Airport food is expensive and bad", optional: "snacks" },
+  ];
+
+  const visibleDayBagItems = DAY_BAG_ITEMS.filter(i => i.always || dayBagOptional[i.optional]);
+  const dayBagDoneCount = visibleDayBagItems.filter(i => dayBagChecked[i.id]).length;
 
   const band = getWeatherBand(weather);
   const { cards } = buildAdvisory({ totalDays, workDays: mode === "holiday" ? 0 : workDays, mode, band, weather });
@@ -727,26 +844,111 @@ export default function PackingApp() {
   // Bag recommendation — real empty bag weights baked in:
   // Backpack ~1.5kg empty · Tumi 19" carry-on 5kg empty · Checked case 4kg empty
   // Thresholds on CLOTHING weight only — bag weight added for display
-  const bagData = bagClothingKg <= 8.5
-    ? { label: "Backpack",            total: (bagClothingKg + 1.5 + kitWeight).toFixed(1), note: "1.5kg bag" }
-    : bagClothingKg <= 10.0
-      ? { label: "Tumi 19\" carry-on", total: (bagClothingKg + 5 + kitWeight).toFixed(1),   note: "5kg bag · carry-on limit ~15kg" }
-      : bagClothingKg <= 19.0
-        ? { label: "Checked case",     total: (bagClothingKg + 4 + kitWeight).toFixed(1),   note: "4kg case · checked limit ~23kg" }
-        : { label: "Over limit",        total: "—", note: "Cut something — you're over checked bag weight" };
+  const BAG_LIMITS = {
+    backpack: { clothing: 8.5,  empty: 1.5, total: 10,  label: "Backpack",         over: "Over backpack limit — switch to Tumi or cut something" },
+    tumi:     { clothing: 10.0, empty: 5,   total: 15,  label: "Tumi 19\" carry-on", over: "Over carry-on limit — switch to checked or cut something" },
+    checked:  { clothing: 19.0, empty: 4,   total: 23,  label: "Checked case",      over: "Over checked limit — cut something" },
+  };
+  const bag = BAG_LIMITS[bagChoice];
+  const totalWithBag = parseFloat((bagClothingKg + bag.empty + kitWeight).toFixed(1));
+  const isOverLimit  = bagClothingKg > bag.clothing;
+  const bagNote      = isOverLimit
+    ? bag.over
+    : `${bag.label} — ${totalWithBag}kg total (${bag.empty}kg bag + ${bagClothingKg}kg clothing${kitWeight > 0 ? ` + ${kitWeight}kg kit` : ""})`;
 
-  const bagNote = `${bagData.label} — ${bagData.total}kg total · ${bagData.note}`;
+  // Backpack-specific: flag heavy items
+  const backpackBulkyItems = bagChoice === "backpack"
+    ? packableCards.filter(c => {
+        const unitW = WEIGHTS[c.category] || 200;
+        return unitW >= 600 && (c.packedQty ?? c.qty) > 0;
+      })
+    : [];
 
   return (
     <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif" }}>
 
       {/* Top bar */}
-      <div style={{ borderBottom: `1px solid ${t.border}`, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, background: t.card }}>
-        <span style={{ fontSize: 18, fontWeight: 400, letterSpacing: "0.5px" }}>Roadie Pack</span>
-        <span style={{ fontSize: 12, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: "system-ui, sans-serif" }}>
-          {packMode ? `${checkedCount} / ${packableCards.length}` : ""}
-        </span>
+      <div style={{ borderBottom: `1px solid ${t.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, background: t.card }}>
+        <div>
+          <span style={{ fontSize: 18, fontWeight: 400, letterSpacing: "0.5px" }}>Roadie Pack</span>
+          {loadedName && (
+            <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, marginLeft: 10 }}>
+              {loadedName}'s list
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 12, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: "system-ui, sans-serif" }}>
+            {packMode ? `${checkedCount} / ${packableCards.length}` : ""}
+          </span>
+          <button onClick={() => { setSaveModal(true); setSaveStatus(""); }}
+            style={{
+              fontFamily: "system-ui, sans-serif", fontSize: 11, letterSpacing: "1px", textTransform: "uppercase",
+              padding: "6px 14px", borderRadius: 6, border: `1px solid ${t.border}`,
+              background: "transparent", color: t.muted, cursor: "pointer",
+            }}>Save</button>
+        </div>
       </div>
+
+      {/* Save modal */}
+      {saveModal && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+        }} onClick={(e) => { if (e.target === e.currentTarget) setSaveModal(false); }}>
+          <div style={{ background: t.card, borderRadius: 16, padding: 32, width: "100%", maxWidth: 400, border: `1px solid ${t.border}` }}>
+            {saveStatus === "sent" ? (
+              <>
+                <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 28, fontWeight: 300, margin: "0 0 12px" }}>Check your inbox</h2>
+                <p style={{ fontSize: 14, color: t.muted, margin: "0 0 24px", lineHeight: 1.6 }}>
+                  Magic link sent to <strong>{saveEmail}</strong>. Click it anytime to restore your exact list.
+                </p>
+                <p style={{ fontSize: 13, color: t.muted, fontStyle: "italic" }}>Your list is also saved on this device automatically.</p>
+                <button onClick={() => setSaveModal(false)} style={{
+                  marginTop: 24, width: "100%", padding: "12px", background: t.accent, color: "#fff",
+                  border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "system-ui, sans-serif", fontSize: 13,
+                }}>Done</button>
+              </>
+            ) : (
+              <>
+                <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 28, fontWeight: 300, margin: "0 0 8px" }}>Save your list</h2>
+                <p style={{ fontSize: 13, color: t.muted, margin: "0 0 24px" }}>We'll email you a magic link. Click it on any device to restore your exact setup.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>Your name</label>
+                    <input type="text" value={saveName} onChange={e => setSaveName(e.target.value)}
+                      placeholder="Dave" style={{ ...inp, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>Email</label>
+                    <input type="email" value={saveEmail} onChange={e => setSaveEmail(e.target.value)}
+                      placeholder="dave@example.com" style={{ ...inp, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+                {saveStatus === "error" && (
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#B91C1C" }}>Something went wrong — try again</p>
+                )}
+                <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                  <button onClick={() => setSaveModal(false)} style={{
+                    flex: 1, padding: "12px", background: "transparent", color: t.muted,
+                    border: `1px solid ${t.border}`, borderRadius: 8, cursor: "pointer",
+                    fontFamily: "system-ui, sans-serif", fontSize: 13,
+                  }}>Cancel</button>
+                  <button onClick={handleSave} disabled={saveStatus === "saving" || !saveName || !saveEmail}
+                    style={{
+                      flex: 2, padding: "12px", background: t.accent, color: "#fff",
+                      border: "none", borderRadius: 8, cursor: "pointer",
+                      fontFamily: "system-ui, sans-serif", fontSize: 13,
+                      opacity: (!saveName || !saveEmail) ? 0.5 : 1,
+                    }}>
+                    {saveStatus === "saving" ? "Sending…" : "Send magic link"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px 80px" }}>
 
@@ -889,29 +1091,57 @@ export default function PackingApp() {
         {/* Inputs */}
         {!packMode && (
           <div style={{ marginBottom: 40 }}>
+
+            {/* Bag selector */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Bag</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[
+                  { id: "backpack", label: "🎒 Backpack", sub: "~10kg total" },
+                  { id: "tumi",     label: "🧳 Tumi 19\"", sub: "~15kg total" },
+                  { id: "checked",  label: "✈️ Checked",  sub: "~23kg total" },
+                ].map(b => (
+                  <button key={b.id} onClick={() => setBagChoice(b.id)} style={{
+                    flex: 1, padding: "10px 8px", borderRadius: 8, border: `1px solid ${bagChoice === b.id ? t.accent : t.border}`,
+                    background: bagChoice === b.id ? t.accentLight : "transparent",
+                    cursor: "pointer", fontFamily: "system-ui, sans-serif", transition: "all 0.15s",
+                  }}>
+                    <div style={{ fontSize: 13, color: bagChoice === b.id ? t.accent : t.text, fontWeight: bagChoice === b.id ? 600 : 400 }}>{b.label}</div>
+                    <div style={{ fontSize: 10, color: t.muted, marginTop: 2 }}>{b.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: mode !== "holiday" ? "1fr 1fr" : "1fr", gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Days away</label>
-                <input type="number" value={totalDays} min={1} max={60} style={inp}
-                  onChange={e => { setTotalDays(parseInt(e.target.value)||1); setOverrides({}); }} />
+                <input type="text" inputMode="numeric" value={totalDays} style={inp}
+                  onFocus={e => e.target.select()}
+                  onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) { setTotalDays(v); setOverrides({}); } else if (e.target.value === "" || e.target.value === "0") setTotalDays(e.target.value); }}
+                  onBlur={e => { const v = parseInt(e.target.value); setTotalDays(isNaN(v) || v < 1 ? 1 : v); }} />
               </div>
               {mode !== "holiday" && (
                 <div>
                   <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Work days</label>
-                  <input type="number" value={workDays} min={0} max={totalDays} style={inp}
-                    onChange={e => { setWorkDays(parseInt(e.target.value)||0); setOverrides({}); }} />
+                  <input type="text" inputMode="numeric" value={workDays} style={inp}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) { setWorkDays(v); setOverrides({}); } else if (e.target.value === "") setWorkDays(e.target.value); }}
+                    onBlur={e => { const v = parseInt(e.target.value); setWorkDays(isNaN(v) || v < 0 ? 0 : v); }} />
                 </div>
               )}
             </div>
-            <div>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Destinations</label>
               <input type="text" value={destination} placeholder="London, Barcelona, Paris" style={inp}
                 onChange={e => { setDest(e.target.value); setOverrides({}); }} />
             </div>
             <div>
               <label style={{ display: "block", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Extra kit weight (kg)</label>
-              <input type="number" value={kitWeight || ""} min={0} max={30} step={0.1} style={inp}
-                onChange={e => setKitWeight(parseFloat(e.target.value) || 0)}
+              <input type="text" inputMode="decimal" value={kitWeight || ""} style={inp}
+                onFocus={e => e.target.select()}
+                onChange={e => { const v = parseFloat(e.target.value); setKitWeight(isNaN(v) ? 0 : v); }}
+                onBlur={e => { const v = parseFloat(e.target.value); setKitWeight(isNaN(v) ? 0 : v); }}
                 placeholder="e.g. 2.5 for interface + cables + plugs" />
             </div>
           </div>
@@ -965,7 +1195,7 @@ export default function PackingApp() {
         {/* View tabs + pack toggle */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${t.border}` }}>
-            {[{ id: "list", label: "List" }, { id: "cubes", label: "Cubes" }].map(v => (
+            {[{ id: "list", label: "List" }, { id: "cubes", label: "Cubes" }, { id: "daybag", label: "Day Bag" }].map(v => (
               <button key={v.id} onClick={() => { setView(v.id); setPackMode(false); }}
                 style={{
                   padding: "8px 16px 7px", background: "none", border: "none", cursor: "pointer",
@@ -1085,7 +1315,95 @@ export default function PackingApp() {
           );
         })()}
 
-        {/* List view */}
+        {/* Day Bag view */}
+        {view === "daybag" && (
+          <div>
+            {/* Optional items toggles */}
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: "0 0 10px" }}>Optional items</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  { id: "ipad",    label: "iPad" },
+                  { id: "pencil",  label: "Apple Pencil" },
+                  { id: "kindle",  label: "Kindle" },
+                  { id: "eyemask", label: "Eye mask" },
+                  { id: "snacks",  label: "Snacks" },
+                ].map(opt => (
+                  <button key={opt.id}
+                    onClick={() => setDayBagOptional(p => ({ ...p, [opt.id]: !p[opt.id] }))}
+                    style={{
+                      padding: "7px 14px", borderRadius: 20, cursor: "pointer",
+                      fontFamily: "system-ui, sans-serif", fontSize: 12,
+                      border: `1px solid ${dayBagOptional[opt.id] ? t.accent : t.border}`,
+                      background: dayBagOptional[opt.id] ? t.accentLight : "transparent",
+                      color: dayBagOptional[opt.id] ? t.accent : t.muted,
+                      transition: "all 0.15s",
+                    }}>{dayBagOptional[opt.id] ? "✓ " : "+ "}{opt.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Progress */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <p style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase", margin: 0 }}>
+                {dayBagDoneCount}/{visibleDayBagItems.length} packed
+              </p>
+              {dayBagDoneCount > 0 && (
+                <button onClick={() => setDayBagChecked({})} style={{
+                  fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted,
+                  background: "none", border: "none", cursor: "pointer", textDecoration: "underline",
+                }}>Reset</button>
+              )}
+            </div>
+            {dayBagDoneCount > 0 && (
+              <div style={{ height: 2, background: t.border, borderRadius: 1, marginBottom: 16, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(dayBagDoneCount/visibleDayBagItems.length)*100}%`, background: t.accent, transition: "width 0.3s" }} />
+              </div>
+            )}
+
+            {/* Items */}
+            <div style={{ borderTop: `1px solid ${t.border}` }}>
+              {visibleDayBagItems.map((item, i) => {
+                const done = !!dayBagChecked[item.id];
+                return (
+                  <div key={item.id}
+                    onClick={() => setDayBagChecked(p => ({ ...p, [item.id]: !p[item.id] }))}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "14px 0", borderBottom: `1px solid ${t.border}`,
+                      cursor: "pointer", opacity: done ? 0.3 : 1, transition: "opacity 0.2s",
+                      userSelect: "none",
+                    }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                      border: `1.5px solid ${done ? t.accent : t.border}`,
+                      background: done ? t.accent : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.15s",
+                    }}>
+                      {done && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 18 }}>{item.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 16, color: t.text, textDecoration: done ? "line-through" : "none" }}>{item.label}</span>
+                      {item.note && !done && (
+                        <p style={{ margin: "2px 0 0", fontSize: 12, color: t.muted, fontStyle: "italic", fontFamily: "inherit" }}>{item.note}</p>
+                      )}
+                    </div>
+                    {!item.always && (
+                      <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, padding: "2px 8px", background: t.chip, borderRadius: 10 }}>optional</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ margin: "20px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 11, color: t.muted, fontStyle: "italic" }}>
+              Pack the checked case first, then the day bag last — so everything you need on the plane is on top.
+            </p>
+          </div>
+        )}
+
         {view === "list" && (
         <div style={{ borderTop: `1px solid ${t.border}` }}>
           {displayCards.map((card) => {
@@ -1290,7 +1608,7 @@ export default function PackingApp() {
         <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
             <p style={{ margin: "0 0 4px", fontFamily: "system-ui, sans-serif", fontSize: 10, color: t.muted, letterSpacing: "1.5px", textTransform: "uppercase" }}>In the bag</p>
-            <span style={{ fontSize: 48, fontWeight: 300, color: t.text, lineHeight: 1, letterSpacing: "-1px" }}>
+            <span style={{ fontSize: 48, fontWeight: 300, color: isOverLimit ? "#B91C1C" : t.text, lineHeight: 1, letterSpacing: "-1px" }}>
               {bagClothingKg}<span style={{ fontSize: 20, color: t.muted }}> kg</span>
             </span>
             {wornWeightG > 0 && (
@@ -1303,9 +1621,22 @@ export default function PackingApp() {
                 + {kitWeight}kg kit = <strong style={{ color: t.text }}>{totalKg}kg</strong> total before bag
               </p>
             )}
-            <p style={{ margin: "6px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: t.accent, letterSpacing: "0.3px" }}>
-              {bagNote}
+            <p style={{ margin: "6px 0 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: isOverLimit ? "#B91C1C" : t.accent, letterSpacing: "0.3px" }}>
+              {isOverLimit ? "⚠️ " : ""}{bagNote}
             </p>
+            {/* Backpack bulky item checker */}
+            {backpackBulkyItems.length > 0 && (
+              <div style={{ marginTop: 12, padding: "10px 12px", background: "#FEF3C7", borderRadius: 8, border: "1px solid #F59E0B" }}>
+                <p style={{ margin: "0 0 6px", fontFamily: "system-ui, sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#92400E" }}>
+                  Heavy items for a backpack
+                </p>
+                {backpackBulkyItems.map(item => (
+                  <p key={item.category} style={{ margin: "2px 0", fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#92400E" }}>
+                    {item.category} — ~{wFmt(WEIGHTS[item.category] * (item.packedQty ?? item.qty))} · consider wearing or leaving behind
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           {Object.keys(overrides).length > 0 && !packMode && (
