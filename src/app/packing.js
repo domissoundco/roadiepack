@@ -701,25 +701,35 @@ export default function PackingApp() {
     if (s.dayBagOptional) setDayBagOptional(s.dayBagOptional);
   };
 
-  // Load from token on mount, then fall back to localStorage
+  // Load from URL ?token= on mount, fall back to localStorage
   useEffect(() => {
     async function load() {
       try {
-        // Check URL for token
         const params = new URLSearchParams(window.location.search);
+
         const token = params.get("token");
         if (token) {
           const res = await fetch(`/api/load?token=${token}`);
           if (res.ok) {
             const data = await res.json();
             applyState(data.state);
-            setLoadedName(data.name);
-            // Save to localStorage too
+            if (data.name) setLoadedName(data.name);
             localStorage.setItem("roadiepack_state", JSON.stringify({ ...data.state, name: data.name }));
             return;
           }
         }
-        // Fall back to localStorage
+
+        // URL-encoded fallback
+        const encoded = params.get("data");
+        if (encoded) {
+          const jsonStr = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'));
+          const decoded = JSON.parse(jsonStr);
+          applyState(decoded.state || decoded);
+          if (decoded.name) setLoadedName(decoded.name);
+          localStorage.setItem("roadiepack_state", JSON.stringify({ ...(decoded.state || decoded), name: decoded.name }));
+          return;
+        }
+
         const saved = localStorage.getItem("roadiepack_state");
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -743,24 +753,30 @@ export default function PackingApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalDays, workDays, mode, destination, kitWeight, bagChoice, overrides, toiletryBag, dayBagOptional]);
 
+  const [saveError, setSaveError] = useState("");
+
   const handleSave = async () => {
     if (!saveName.trim() || !saveEmail.trim()) return;
     setSaveStatus("saving");
+    setSaveError("");
     try {
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: saveName.trim(), email: saveEmail.trim(), state: getState() }),
       });
+      const data = await res.json();
       if (res.ok) {
         setSaveStatus("sent");
         setLoadedName(saveName.trim());
         localStorage.setItem("roadiepack_state", JSON.stringify({ ...getState(), name: saveName.trim() }));
       } else {
         setSaveStatus("error");
+        setSaveError(data.detail || data.error || `Error ${res.status}`);
       }
-    } catch {
+    } catch (e) {
       setSaveStatus("error");
+      setSaveError(e.message || "Network error");
     }
   };
 
@@ -943,7 +959,9 @@ export default function PackingApp() {
                   </div>
                 </div>
                 {saveStatus === "error" && (
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#B91C1C" }}>Something went wrong — try again</p>
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#B91C1C" }}>
+                    {saveError || "Something went wrong — try again"}
+                  </p>
                 )}
                 <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                   <button onClick={() => setSaveModal(false)} style={{
