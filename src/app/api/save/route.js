@@ -15,7 +15,7 @@ export async function POST(req) {
     const data  = { name, email, state, savedAt: Date.now() };
 
     // Store in Blob
-    const blobResult = await put(`lists/${token}.json`, JSON.stringify(data), {
+    const blobResult = await put(`roadiepack/lists/${token}.json`, JSON.stringify(data), {
       access: "public",
       contentType: "application/json",
     });
