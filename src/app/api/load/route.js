@@ -9,25 +9,21 @@ export async function GET(req) {
       return NextResponse.json({ error: "No token" }, { status: 400 });
     }
 
-    // Fetch the blob directly by its public URL pattern
-    const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || "https://roadiepack.vercel.app";
-    const blobBase = process.env.BLOB_STORE_BASE_URL;
-
-    if (!blobBase) {
+    // Fetch directly from Blob public URL
+    const storeUrl = process.env.BLOB_STORE_BASE_URL;
+    if (!storeUrl) {
       return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
     }
 
-    const blobUrl = `${blobBase}/lists/${token}.json`;
-    const res     = await fetch(blobUrl);
-
+    const res = await fetch(`${storeUrl}/lists/${token}.json`);
     if (!res.ok) {
-      return NextResponse.json({ error: "List not found or expired" }, { status: 404 });
+      return NextResponse.json({ error: "List not found" }, { status: 404 });
     }
 
     const data = await res.json();
     return NextResponse.json(data);
   } catch (err) {
-    console.error("Load error:", err);
-    return NextResponse.json({ error: "Failed to load" }, { status: 500 });
+    console.error("Load error:", err.message);
+    return NextResponse.json({ error: "Failed to load", detail: err.message }, { status: 500 });
   }
 }
