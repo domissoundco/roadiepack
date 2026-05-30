@@ -1,28 +1,27 @@
 import { NextResponse } from "next/server";
-import { list } from "@vercel/blob";
 
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const token = searchParams.get("token");
 
-    console.log("Load called, token:", token);
-
     if (!token) {
       return NextResponse.json({ error: "No token" }, { status: 400 });
     }
 
-    const prefix = `lists/${token}.json`;
-    console.log("Looking for blob:", prefix);
+    const storeUrl = "https://wjtdqyontda5abo7.public.blob.vercel-storage.com";
+    const blobUrl  = `${storeUrl}/lists/${token}.json`;
 
-    const { blobs } = await list({ prefix });
-    console.log("Blobs found:", blobs.length, blobs.map(b => b.url));
+    console.log("Fetching:", blobUrl);
 
-    if (!blobs.length) {
+    const res = await fetch(blobUrl);
+
+    console.log("Blob response status:", res.status);
+
+    if (!res.ok) {
       return NextResponse.json({ error: "List not found" }, { status: 404 });
     }
 
-    const res  = await fetch(blobs[0].url);
     const data = await res.json();
     console.log("Loaded name:", data.name);
 
