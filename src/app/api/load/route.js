@@ -10,7 +10,7 @@ export async function GET(req) {
     }
 
     const storeUrl = "https://wjtdqyontda5abo7.public.blob.vercel-storage.com";
-    const blobUrl  = `${storeUrl}/lists/${token}.json`;
+    const blobUrl  = `${storeUrl}/roadiepack/lists/${token}.json`;
 
     console.log("Fetching:", blobUrl);
 
